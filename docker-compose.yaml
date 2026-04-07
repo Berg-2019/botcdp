@@ -1,0 +1,72 @@
+version: "3"
+
+networks:
+  botcdp:
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_DIALECT=${DB_DIALECT:-mysql}
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASS=${MYSQL_ROOT_PASSWORD:-botcdp123}
+      - DB_NAME=${MYSQL_DATABASE:-botcdp}
+      - JWT_SECRET=${JWT_SECRET:-troque-em-prod-jwt}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-troque-em-prod-refresh}
+      - BACKEND_URL=${BACKEND_URL:-http://localhost}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - PROXY_PORT=${PROXY_PORT:-8080}
+      - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-whaileys}
+      - IO_REDIS_SERVER=redis
+      - IO_REDIS_PORT=6379
+      - CHROME_ARGS=--no-sandbox --disable-setuid-sandbox
+    depends_on:
+      - mysql
+      - redis
+    ports:
+      - ${BACKEND_PORT:-8080}:3000
+    volumes:
+      - ./backend/public/:/usr/src/app/public/
+      - ./backend/.wwebjs_auth/:/usr/src/app/.wwebjs_auth/
+    networks:
+      - botcdp
+
+  frontend:
+    ports:
+      - ${FRONTEND_PORT:-3000}:80
+    build:
+      context: ./frontend
+      dockerfile: ./Dockerfile
+    environment:
+      - URL_BACKEND=backend:3000
+      - REACT_APP_BACKEND_URL=${BACKEND_URL:-http://localhost}:${PROXY_PORT:-8080}/
+    depends_on:
+      - backend
+    networks:
+      - botcdp
+
+  mysql:
+    image: mariadb:10.6
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_bin
+    volumes:
+      - ./.docker/mysql/:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-botcdp}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-botcdp123}
+      - TZ=${TZ:-America/Sao_Paulo}
+    ports:
+      - ${MYSQL_PORT:-3306}:3306
+    restart: always
+    networks:
+      - botcdp
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - ./.docker/redis/:/data
+    networks:
+      - botcdp
