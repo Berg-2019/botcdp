@@ -1,0 +1,11 @@
+node_modules/
+.env
+.docker/
+backend/dist/
+backend/.wwebjs_auth/
+backend/public/*
+!backend/public/.gitkeep
+frontend/build/
+frontend/dist/
+*.log
+.DS_Store
