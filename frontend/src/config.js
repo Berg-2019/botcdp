@@ -8,7 +8,7 @@ function getConfig(name, defaultValue = null) {
 }
 
 export function getBackendUrl() {
-  return "http://localhost:8085/";
+  return getConfig("REACT_APP_BACKEND_URL", "http://localhost:8081/");
 }
 
 export function getHoursCloseTicketsAuto() {
