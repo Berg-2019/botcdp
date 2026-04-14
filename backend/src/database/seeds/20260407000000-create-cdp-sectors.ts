@@ -87,7 +87,7 @@ module.exports = {
 
     // Vincular cada agente à respectiva fila
     const users: Array<{ id: number; email: string }> = (await queryInterface.sequelize.query(
-      `SELECT id, email FROM "Users" WHERE email IN (${sectors
+      `SELECT id, email FROM \`Users\` WHERE email IN (${sectors
         .map(s => `'${s.user.email}'`)
         .join(",")})`
     ))[0] as any;

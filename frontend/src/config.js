@@ -8,7 +8,7 @@ function getConfig(name, defaultValue = null) {
 }
 
 export function getBackendUrl() {
-  return "http://localhost:8085/";
+  return "http://localhost:8080/";
 }
 
 export function getHoursCloseTicketsAuto() {
