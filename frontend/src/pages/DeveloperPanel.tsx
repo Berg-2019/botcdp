@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/services/api';
 import { getSocket } from '@/services/socket';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,25 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
   DISCONNECTED: { label: 'Desconectado',    color: 'text-gray-400',   icon: WifiOff },
 };
 
+// Componente que renderiza a string QR em canvas (a string vinda do Whaileys é texto puro, não data URL)
+function QrCanvas({ data }: { data: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !data) return;
+
+    // Importa dinamicamente a lib qrcode para gerar a imagem no canvas
+    import('qrcode').then((QRCodeLib) => {
+      QRCodeLib.toCanvas(canvasRef.current, data, {
+        width: 256,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      }).catch((err: unknown) => console.error('Erro ao gerar QR:', err));
+    });
+  }, [data]);
+
+  return <canvas ref={canvasRef} className="w-56 h-56" />;
+}
 export default function DeveloperPanel() {
   const [tab, setTab] = useState<Tab>('greetings');
   const [greetings, setGreetings] = useState<GreetingConfig[]>([]);
@@ -382,11 +401,7 @@ export default function DeveloperPanel() {
                         <p className="text-xs text-gray-600 font-medium">
                           📱 Abra o WhatsApp no celular → Configurações → Aparelhos Conectados → Escanear QR Code
                         </p>
-                        <img
-                          src={wa.qrcode}
-                          alt="QR Code WhatsApp"
-                          className="w-56 h-56 object-contain"
-                        />
+                        <QrCanvas data={wa.qrcode} />
                         <p className="text-[10px] text-gray-400">O QR é renovado automaticamente a cada 40s</p>
                       </div>
                     </div>
