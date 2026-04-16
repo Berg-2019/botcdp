@@ -41,7 +41,7 @@ export const stats = async (req: Request, res: Response): Promise<Response> => {
           fn(
             "TIMESTAMPDIFF",
             literal("SECOND"),
-            col("Ticket.createdAt"),
+            col("ticket.createdAt"),
             col("Message.createdAt")
           )
         ),

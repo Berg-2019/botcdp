@@ -45,10 +45,10 @@ function AppRoutes() {
         <Route path="/login" element={isAuthenticated ? <Navigate to={getHomeRoute(user?.profile)} replace /> : <Login />} />
 
         {/* Rotas de Agente */}
-        <Route path="/" element={<ProtectedRoute allowedProfiles={['agent']}><Index /></ProtectedRoute>} />
-        <Route path="/attending" element={<ProtectedRoute allowedProfiles={['agent']}><Attending /></ProtectedRoute>} />
-        <Route path="/chat/:id" element={<ProtectedRoute allowedProfiles={['agent']}><Chat /></ProtectedRoute>} />
-        <Route path="/contacts" element={<ProtectedRoute allowedProfiles={['agent']}><Contacts /></ProtectedRoute>} />
+        <Route path="/" element={<ProtectedRoute allowedProfiles={['agent', 'user']}><Index /></ProtectedRoute>} />
+        <Route path="/attending" element={<ProtectedRoute allowedProfiles={['agent', 'user']}><Attending /></ProtectedRoute>} />
+        <Route path="/chat/:id" element={<ProtectedRoute allowedProfiles={['agent', 'user']}><Chat /></ProtectedRoute>} />
+        <Route path="/contacts" element={<ProtectedRoute allowedProfiles={['agent', 'user']}><Contacts /></ProtectedRoute>} />
 
         {/* Rotas de Administrador */}
         <Route path="/admin" element={<ProtectedRoute allowedProfiles={['admin']}><AdminDashboard /></ProtectedRoute>} />

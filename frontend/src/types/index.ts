@@ -140,3 +140,21 @@ export interface GeneralSettings {
   outOfHoursMessage: string;
   maxOpenTicketsPerAgent: number;
 }
+
+// Tipos de conexão WhatsApp (sessão do bot)
+export type WhatsappStatus = 'OPENING' | 'qrcode' | 'CONNECTED' | 'TIMEOUT' | 'DISCONNECTED' | 'PAIRING';
+
+export interface WhatsappConnection {
+  id: number;
+  name: string;
+  status: WhatsappStatus;
+  qrcode: string;
+  battery: string;
+  plugged: boolean;
+  isDefault: boolean;
+  retries: number;
+  greetingMessage: string;
+  farewellMessage: string;
+  queues: Queue[];
+  updatedAt: string;
+}

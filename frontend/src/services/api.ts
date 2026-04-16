@@ -1,6 +1,8 @@
-import type { User, Ticket, Message, QuickAnswer, Queue, Contact, DashboardStats, TicketsByQueue, AgentPerformance, VolumeByPeriod, SLAByQueue, GreetingConfig, BotFlow, SystemUser, GeneralSettings } from '@/types';
+import type { User, Ticket, Message, QuickAnswer, Queue, Contact, DashboardStats, TicketsByQueue, AgentPerformance, VolumeByPeriod, SLAByQueue, GreetingConfig, BotFlow, SystemUser, GeneralSettings, WhatsappConnection } from '@/types';
 
-const API_URL = localStorage.getItem('api_url') || 'http://localhost:8080';
+// Ignora a porta 8080 que foi armazenada erroneamente cacheada pelo navegador local.
+const cachedApiUrl = localStorage.getItem('api_url');
+const API_URL = (cachedApiUrl && cachedApiUrl !== 'http://localhost:8080') ? cachedApiUrl : 'http://localhost:8081';
 
 function getToken(): string | null {
   return localStorage.getItem('token');
@@ -15,16 +17,16 @@ function headers(): HeadersInit {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const baseUrl = localStorage.getItem('api_url') || API_URL;
+  const baseUrl = API_URL;
   const res = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: { ...headers(), ...options?.headers },
   });
-  if (res.status === 401) {
+  if (res.status === 401 || res.status === 403) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
-    throw new Error('Unauthorized');
+    throw new Error('Unauthorized or Forbidden');
   }
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -36,7 +38,7 @@ export const api = {
   },
 
   getBaseUrl() {
-    return localStorage.getItem('api_url') || 'http://localhost:8080';
+    return API_URL;
   },
 
   async login(phone: string, password: string): Promise<User> {
@@ -86,7 +88,7 @@ export const api = {
   },
 
   async sendMedia(ticketId: number, file: File | Blob, caption = ''): Promise<Message> {
-    const baseUrl = localStorage.getItem('api_url') || 'http://localhost:8080';
+    const baseUrl = API_URL;
     const token = getToken();
     const formData = new FormData();
     const fileName = file instanceof File ? file.name : `audio_${Date.now()}.webm`;
@@ -174,5 +176,34 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(settings),
     });
+  },
+
+  // --- Conexões WhatsApp ---
+
+  async getWhatsapps(): Promise<WhatsappConnection[]> {
+    return request('/api/whatsapp');
+  },
+
+  async createWhatsapp(data: { name: string; queueIds?: number[]; isDefault?: boolean }): Promise<WhatsappConnection> {
+    return request('/api/whatsapp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async startWhatsappSession(id: number): Promise<void> {
+    return request(`/api/whatsappsession/${id}`, { method: 'POST' });
+  },
+
+  async restartWhatsappSession(id: number): Promise<void> {
+    return request(`/api/whatsappsession/${id}`, { method: 'PUT' });
+  },
+
+  async disconnectWhatsapp(id: number): Promise<void> {
+    return request(`/api/whatsappsession/${id}`, { method: 'DELETE' });
+  },
+
+  async deleteWhatsapp(id: number): Promise<void> {
+    return request(`/api/whatsapp/${id}`, { method: 'DELETE' });
   },
 };
