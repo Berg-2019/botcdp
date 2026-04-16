@@ -16,18 +16,76 @@ function headers(): HeadersInit {
   };
 }
 
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+/**
+ * Tenta renovar o token JWT usando o refresh token (cookie jrt).
+ * Se funcionar, atualiza o token no localStorage e retorna o novo token.
+ * Se falhar, retorna null.
+ */
+async function tryRefreshToken(): Promise<string | null> {
+  if (isRefreshing && refreshPromise) return refreshPromise;
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = API_URL;
+      const res = await fetch(`${baseUrl}/api/auth/refresh_token`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+        return data.token as string;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const baseUrl = API_URL;
   const res = await fetch(`${baseUrl}${path}`, {
     ...options,
+    credentials: 'include',
     headers: { ...headers(), ...options?.headers },
   });
+
+  // Se o token expirou (401/403), tenta renovar antes de deslogar
   if (res.status === 401 || res.status === 403) {
+    const newToken = await tryRefreshToken();
+    if (newToken) {
+      // Refaz a requisição com o token atualizado
+      const retryRes = await fetch(`${baseUrl}${path}`, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${newToken}`,
+          ...options?.headers,
+        },
+      });
+      if (retryRes.ok) return retryRes.json();
+    }
+    // Se o refresh também falhou, desloga
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
     throw new Error('Unauthorized or Forbidden');
   }
+
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

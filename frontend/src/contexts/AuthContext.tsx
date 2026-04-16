@@ -22,9 +22,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = localStorage.getItem('token');
     if (stored && token) {
       setUser({ ...stored, token });
-      if (stored.profile === 'agent' || !stored.profile) {
-        connectSocket();
-      }
+      // Conecta o socket para todos os perfis autenticados
+      // (developer precisa para receber eventos de sessão WhatsApp)
+      connectSocket();
     }
     setLoading(false);
   }, []);
@@ -32,9 +32,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (phone: string, password: string) => {
     const u = await api.login(phone, password);
     setUser(u);
-    if (u.profile === 'agent' || !u.profile) {
-      connectSocket();
-    }
+    // Conecta o socket para qualquer perfil autenticado
+    connectSocket();
   }, []);
 
   const logout = useCallback(() => {
