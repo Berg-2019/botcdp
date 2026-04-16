@@ -44,19 +44,19 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to={getHomeRoute(user?.profile)} replace /> : <Login />} />
 
-        {/* Agent routes */}
+        {/* Rotas de Agente */}
         <Route path="/" element={<ProtectedRoute allowedProfiles={['agent']}><Index /></ProtectedRoute>} />
         <Route path="/attending" element={<ProtectedRoute allowedProfiles={['agent']}><Attending /></ProtectedRoute>} />
         <Route path="/chat/:id" element={<ProtectedRoute allowedProfiles={['agent']}><Chat /></ProtectedRoute>} />
         <Route path="/contacts" element={<ProtectedRoute allowedProfiles={['agent']}><Contacts /></ProtectedRoute>} />
 
-        {/* Admin routes */}
+        {/* Rotas de Administrador */}
         <Route path="/admin" element={<ProtectedRoute allowedProfiles={['admin']}><AdminDashboard /></ProtectedRoute>} />
 
-        {/* Developer routes */}
+        {/* Rotas de Desenvolvedor */}
         <Route path="/developer" element={<ProtectedRoute allowedProfiles={['developer']}><DeveloperPanel /></ProtectedRoute>} />
 
-        {/* Shared */}
+        {/* Rotas Compartilhadas */}
         <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

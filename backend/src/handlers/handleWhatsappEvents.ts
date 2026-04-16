@@ -140,7 +140,7 @@ const processVcardMessage = async (
       )
     );
   } catch (error) {
-    logger.error("Error processing vcard message:", error);
+    logger.error("Erro ao processar mensagem de contato (vcard):", error);
   }
 };
 
@@ -181,7 +181,7 @@ const handleQueueLogic = async (
         body
       );
     } catch (error) {
-      logger.error("Error sending queue greeting message:", error);
+      logger.error("Erro ao enviar mensagem de saudação da fila:", error);
     }
   } else {
     let options = "";
@@ -203,7 +203,7 @@ const handleQueueLogic = async (
             body
           );
         } catch (error) {
-          logger.error("Error sending queue options message:", error);
+          logger.error("Erro ao enviar mensagem com opções da fila:", error);
         }
       },
       3000,
@@ -310,7 +310,7 @@ export const handleMessage = async (
   } catch (err) {
     Sentry.captureException(err);
     logger.error({
-      info: "Error handling message",
+      info: "Erro ao lidar com a mensagem recebida",
       err,
       messagePayload,
       contactPayload,
@@ -352,6 +352,6 @@ export const handleMessageAck = async (
     });
   } catch (err) {
     Sentry.captureException(err);
-    logger.error(`Error handling message ack: ${err}`);
+    logger.error(`Erro ao lidar com confirmação de mensagem (ack): ${err}`);
   }
 };

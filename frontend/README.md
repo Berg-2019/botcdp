@@ -1,6 +1,6 @@
 # PWA Mobile - Painel Multi-Perfil para Atendimento
 
-App mobile-first (PWA) para gerenciamento de tickets de atendimento via WhatsApp, com suporte a múltiplos perfis de usuário (Agente, Administrador e Developer). Integrado com backend Whaticket.
+App mobile-first (PWA) para gerenciamento de tickets de atendimento via WhatsApp, com suporte a múltiplos perfis de usuário (Agente, Administrador e Developer). Integrado com backend BotCDP.
 
 ---
 
@@ -189,7 +189,7 @@ Os arquivos otimizados estarão em `dist/`
 
 ---
 
-## 🌐 Integração com Backend Whaticket
+## 🌐 Integração com Backend BotCDP
 
 ### Endpoints da API REST
 
@@ -583,7 +583,7 @@ Este projeto está sob a licença MIT.
 
 ## 🆘 Suporte
 
-Para dúvidas sobre integração com backend Whaticket, consulte a [documentação oficial do Whaticket](https://github.com/canove/whaticket).
+Para dúvidas sobre integração com backend BotCDP, consulte a base de conhecimento do projeto.
 
 **Endpoints sugeridos** (Admin/Developer) precisam ser implementados no backend - a estrutura frontend já está pronta para consumir.
 

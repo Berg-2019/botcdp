@@ -1,19 +1,21 @@
-# botcdp — Atendimento WhatsApp para CD Peças/Varejo
+# BotCDP — Atendimento WhatsApp para CD Peças/Varejo
 
-Sistema multi-agente de atendimento via WhatsApp para loja de varejo (ferramentas, peças agrícolas, mangueiras hidráulicas, materiais elétricos). Mensagens chegam, o bot apresenta um menu de 6 setores e direciona o ticket ao agente da fila correspondente.
+Sistema multi-agente de atendimento via WhatsApp para loja de varejo (ferramentas, peças agrícolas, mangueiras hidráulicas, materiais elétricos). O sistema recebe as mensagens, apresenta um menu interativo com 6 setores disponíveis, e direciona o cliente para a fila correspondente onde um agente assume o atendimento.
 
-## Stack
+## Stack Tecnológica (Nova Estrutura)
 
-- **Backend**: Node.js + TypeScript + Express + Sequelize (fork enxuto do [whaticket-community](https://github.com/canove/whaticket-community))
-- **Camada WhatsApp**: Baileys via provider `whaileys` (inspirado em [takeshi-bot](https://github.com/iLuanGB/takeshi-bot))
-- **Frontend**: React (do whaticket-community)
-- **Banco**: MariaDB/MySQL
-- **Cache/Sessões**: Redis
-- **Container**: Docker Compose
+- **Backend**: Node.js + TypeScript + Express + Sequelize. Uma versão otimizada e customizada (fork enxuto) do ecossistema whaticket-community.
+- **Camada WhatsApp**: Integração baseada em Baileys via provider `whaileys` (inspirado em takeshi-bot).
+- **Frontend (Novo)**: PWA Mobile-first construído com React 18, TypeScript, Vite e shadcn/ui. Completamente remodelado para desempenho e usabilidade com foco mobile.
+- **Banco de Dados**: MariaDB/MySQL.
+- **Cache e Controle de Sessão**: Redis.
+- **Ambiente/Containerização**: Docker Compose.
 
-## Setores (Queues)
+> O frontend antigo desenvolvido em React/MUI encontra-se temporariamente arquivado no diretório `frontend-backup/` para fins de referência.
 
-| ID | Setor | Agente seed |
+## Setores (Filas / Queues)
+
+| ID | Nome do Setor | Agente Padrão (Email de Acesso) |
 |----|-------|------------|
 | 1 | Escritório / Financeiro / Cadastro | financeiro@botcdp.com |
 | 2 | Vendas Balcão | vendedor.balcao@botcdp.com |
@@ -22,39 +24,51 @@ Sistema multi-agente de atendimento via WhatsApp para loja de varejo (ferramenta
 | 5 | Serviços - Baterias | tecnico.bateria@botcdp.com |
 | 6 | Socorro / Emergência | atendente.socorro@botcdp.com |
 
-Senha inicial dos 6 agentes: **`cdp123`** (trocar em produção).
-Admin inicial: `admin@botcdp.com` / `admin` (do seed do whaticket).
+**Credenciais Padrão:**
+A senha inicial estabelecida para os 6 agentes é: **`cdp123`** *(Importante: alterar esta senha ao mover para produção)*.
+Acesso do Usuário Administrador: `admin@botcdp.com` / `admin` (senha padrão do seed).
 
-## Subir
+## Como Subir a Aplicação
+
+Siga as etapas abaixo para criar as variáveis de ambiente, fazer a compilação das imagens do docker e povoar a base de dados:
 
 ```bash
+# 1. Prepare as variáveis de ambiente
 cp .env.example .env
+
+# 2. Inicie os containers (construindo o novo frontend)
 docker compose up -d --build
+
+# 3. Execute as automações de banco de dados
 docker compose exec backend npx sequelize db:migrate
 docker compose exec backend npx sequelize db:seed:all
 ```
 
-Painel: http://localhost:3000 — Backend: http://localhost:8080
+**Acessos Locais:**
+- **Painel de Atendimento (Frontend):** http://localhost:3000
+- **Servidor da API (Backend):** http://localhost:8080
 
-## Conectar WhatsApp
+## Primeira Conexão com o WhatsApp
 
-1. Logar no painel como admin.
-2. Em **Conexões**, criar uma nova conexão (tipo `whaileys`) e dar um nome.
-3. **Vincular as 6 queues à conexão** e definir a `greetingMessage` (texto do menu, ex.:
-   `"Olá! Escolha o setor:"`). O whaticket irá automaticamente concatenar `1 - Escritório...` etc.
-4. Escanear o QR code.
+1. Faça o login no painel de atendimento como administrador (`admin@botcdp.com`).
+2. Navegue até a seção de **Conexões** e gere uma nova conexão preenchendo as configurações adequadas.
+3. **Vincule todas as 6 filas (setores)** à conexão criada e configure sua Mensagem de Saudação (`greetingMessage`) — por exemplo: 
+   `"Olá! Seja bem-vindo. Por favor, escolha um dos setores abaixo:"`. 
+   > O sistema automaticamente anexará "1 - Escritório...", etc., não é necessário digitar as filas.
+4. Escaneie o QR Code no seu aparelho telefônico para concretizar o vínculo.
 
-## Fluxo
+## Fluxo de Operação
 
-1. Cliente manda qualquer mensagem → ticket criado em `pending` (sem queue).
-2. Bot envia menu de 6 opções (concatenado a partir das queues vinculadas).
-3. Cliente responde com `1`..`6` → `handleQueueLogic` faz `Ticket.update({ queueId })` e envia o `greetingMessage` daquela queue.
-4. Ticket aparece na fila do agente vinculado àquela queue (`UserQueues`).
+1. **Recepção:** O cliente envia uma mensagem inicial e um ticket é criado com estado `pendente` sem associação a nenhuma fila.
+2. **Menu:** O bot envia o texto de boas-vindas seguido da listagem contendo nossa numeração de setores (baseada nas filas configuradas).
+3. **Roteamento:** O cliente responde exclusivamente com um dígito (`1` a `6`). O núcleo do sistema (`handleQueueLogic`) detecta essa opção, atrela o ticket no banco de dados (`Ticket.update({ queueId })`) e retorna com uma mensagem de saudação específica daquela fila definida.
+4. **Atendimento:** Nesse momento, o ticket desponta na interface dos usuários agentes atribuídos à respectiva fila.
 
-A lógica de menu/queue está em [backend/src/handlers/handleWhatsappEvents.ts](backend/src/handlers/handleWhatsappEvents.ts) (`handleQueueLogic`).
+A arquitetura responsiva dessa lógica fica principalmente concentrada no arquivo:
+`backend/src/handlers/handleWhatsappEvents.ts`
 
-## Diferenças vs. whaticket-community
+## Ajustes e Padrões Aplicados 
 
-- Removido: `QuickAnswer`, `WppKey`, `ImportPhoneContacts`.
-- Sessão Baileys persiste `creds` em `Whatsapps.session`; chaves de sinal ficam **em memória** (Map por sessão) — basta reescanear o QR após restart se a sessão expirar.
-- Seed `20260407000000-create-cdp-sectors.ts` cria as 6 queues + 6 agentes + vínculos `UserQueues`.
+- Suprimidos recursos não utilizados para dar performance: `QuickAnswer`, `WppKey`, `ImportPhoneContacts`.
+- Sessão Baileys persistindo `creds` na coluna `Whatsapps.session`; no entanto, as chaves de re-sinal são estocadas apenas em espaço de memória (Map interno por sessão), bastando uma re-avaliação do QR Code se ocorrer reinício grave da instância.
+- Seed automático `20260407000000-create-cdp-sectors.ts` gera e cadastra automaticamente os 6 setores básicos com agentes de testes.
