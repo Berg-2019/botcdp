@@ -17,6 +17,8 @@ import Message from "./Message";
 import Queue from "./Queue";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
+import BotFlow from "./BotFlow";
+import BotStep from "./BotStep";
 
 @Table
 class Ticket extends Model<Ticket> {
@@ -71,6 +73,30 @@ class Ticket extends Model<Ticket> {
 
   @BelongsTo(() => Queue)
   queue: Queue;
+
+  // --- Estado do fluxo de bot associado a este ticket ---
+  // botFlowId: fluxo em execução (null = nenhum fluxo ativo).
+  // botStepId: etapa atual dentro do fluxo (null = fluxo não iniciado).
+  // botInvalidAttempts: contador usado para desistir quando o cliente
+  // responde algo que não bate em nenhuma opção do step atual.
+  // Ver backend/src/services/WbotServices/ExecuteBotFlowService.ts.
+  @ForeignKey(() => BotFlow)
+  @Column
+  botFlowId: number | null;
+
+  @BelongsTo(() => BotFlow)
+  botFlow: BotFlow;
+
+  @ForeignKey(() => BotStep)
+  @Column
+  botStepId: number | null;
+
+  @BelongsTo(() => BotStep)
+  botStep: BotStep;
+
+  @Default(0)
+  @Column
+  botInvalidAttempts: number;
 
   @HasMany(() => Message)
   messages: Message[];

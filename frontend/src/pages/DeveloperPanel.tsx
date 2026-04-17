@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { GreetingConfig, BotFlow, SystemUser, GeneralSettings, Queue, WhatsappConnection } from '@/types';
+import { BotFlowEditorDialog } from '@/components/BotFlowEditorDialog';
 
 type Tab = 'greetings' | 'queues' | 'users' | 'bot' | 'general';
 
@@ -99,6 +100,16 @@ export default function DeveloperPanel() {
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: number; name: string } | null>(null);
+
+  // --- Estado dos fluxos de bot ---
+  // showBotFlowDialog controla abrir/fechar do editor de fluxos.
+  // editingBotFlow: null = criar novo, BotFlow = edição do fluxo selecionado.
+  // flowToDelete + showDeleteFlowDialog: fluxo pendente de confirmação de remoção.
+  const [showBotFlowDialog, setShowBotFlowDialog] = useState(false);
+  const [editingBotFlow, setEditingBotFlow] = useState<BotFlow | null>(null);
+  const [flowToDelete, setFlowToDelete] = useState<BotFlow | null>(null);
+  const [showDeleteFlowDialog, setShowDeleteFlowDialog] = useState(false);
+  const [deletingFlow, setDeletingFlow] = useState(false);
 
   // Busca geral de dados ao montar o componente
   useEffect(() => {
@@ -463,6 +474,111 @@ export default function DeveloperPanel() {
     }
   };
 
+  // ==================================================================
+  // Handlers de Fluxos de Bot
+  // ------------------------------------------------------------------
+  // O editor (BotFlowEditorDialog) é usado tanto para criar quanto para
+  // editar. Ao salvar, ele retorna o fluxo persistido e chamamos
+  // onBotFlowSaved para atualizar a lista local.
+  // ==================================================================
+
+  // Abre o editor em modo criação (sem fluxo pré-selecionado).
+  const handleOpenNewBotFlow = () => {
+    setEditingBotFlow(null);
+    setShowBotFlowDialog(true);
+  };
+
+  // Abre o editor em modo edição, pré-preenchendo com o fluxo clicado.
+  const handleOpenEditBotFlow = (flow: BotFlow) => {
+    setEditingBotFlow(flow);
+    setShowBotFlowDialog(true);
+  };
+
+  // Após salvar (create ou update), recarregamos a lista para refletir
+  // steps e IDs reais (o backend recria steps no update, então IDs mudam).
+  const handleBotFlowSaved = async () => {
+    try {
+      const flows = await api.getBotFlows();
+      setBotFlows(flows);
+    } catch (err) {
+      console.error('Erro ao recarregar fluxos do bot:', err);
+    }
+  };
+
+  // Alterna o campo `enabled` e persiste imediatamente via PUT.
+  // Precisamos enviar o payload completo (o backend faz replace dos
+  // steps), então reaproveitamos os steps existentes convertendo as
+  // referências internas (nextStepId → nextStepIndex).
+  const handleToggleBotFlowEnabled = async (flow: BotFlow, nextValid: boolean) => {
+    // Atualização otimista na UI.
+    setBotFlows((prev) =>
+      prev.map((f) => (f.id === flow.id ? { ...f, enabled: nextValid } : f)),
+    );
+
+    try {
+      // Mapa stepId -> índice, para converter nextStepId em nextStepIndex
+      // no payload (o backend recria os steps e recalcula os IDs).
+      const idToIndex = new Map<number, number>();
+      flow.steps.forEach((s, i) => idToIndex.set(s.id, i));
+
+      await api.updateBotFlow(flow.id, {
+        name: flow.name,
+        queueId: flow.queueId,
+        enabled: nextValid,
+        steps: flow.steps.map((s) => ({
+          message: s.message,
+          options: s.options.map((o) => {
+            const out: { label: string; nextStepIndex?: number; queueId?: number } = {
+              label: o.label,
+            };
+            if (typeof o.queueId === 'number') out.queueId = o.queueId;
+            else if (typeof o.nextStepId === 'number' && idToIndex.has(o.nextStepId)) {
+              out.nextStepIndex = idToIndex.get(o.nextStepId)!;
+            }
+            return out;
+          }),
+        })),
+      });
+      // Recarrega para sincronizar IDs dos steps após o replace do backend.
+      const flows = await api.getBotFlows();
+      setBotFlows(flows);
+    } catch (err) {
+      // Reverte UI em caso de erro.
+      setBotFlows((prev) =>
+        prev.map((f) => (f.id === flow.id ? { ...f, enabled: !nextValid } : f)),
+      );
+      toast.error('Erro ao atualizar fluxo', {
+        description: getReadableErrorMessage(err),
+      });
+    }
+  };
+
+  // Abre o dialog de confirmação de remoção.
+  const handleAskDeleteBotFlow = (flow: BotFlow) => {
+    setFlowToDelete(flow);
+    setShowDeleteFlowDialog(true);
+  };
+
+  // Confirma a remoção e recarrega a lista.
+  const handleConfirmDeleteBotFlow = async () => {
+    if (!flowToDelete) return;
+    try {
+      setDeletingFlow(true);
+      await api.deleteBotFlow(flowToDelete.id);
+      const flows = await api.getBotFlows();
+      setBotFlows(flows);
+      toast.success(`Fluxo "${flowToDelete.name}" removido.`);
+      setShowDeleteFlowDialog(false);
+      setFlowToDelete(null);
+    } catch (err) {
+      toast.error('Erro ao remover fluxo', {
+        description: getReadableErrorMessage(err),
+      });
+    } finally {
+      setDeletingFlow(false);
+    }
+  };
+
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
@@ -759,24 +875,69 @@ export default function DeveloperPanel() {
               </div>
             </div>
 
-            {/* ---- SEÇÃO 2: Fluxos do Bot (mantida) ---- */}
+            {/* ---- SEÇÃO 2: Fluxos do Bot ---- */}
+            {/*
+              Cada card representa um BotFlow. O usuário pode:
+              - Criar um novo fluxo (botão "Novo Fluxo" abre o editor em modo criação)
+              - Editar um fluxo existente (botão de lápis abre o editor já preenchido)
+              - Ativar/desativar via Switch (persiste imediatamente via PUT)
+              - Remover um fluxo (botão lixeira abre confirmação)
+            */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">Fluxos do Bot</h2>
-              <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl h-8 text-xs"
+                onClick={handleOpenNewBotFlow}
+              >
                 <Plus className="h-3 w-3 mr-1" /> Novo Fluxo
               </Button>
             </div>
+
+            {botFlows.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Nenhum fluxo configurado ainda. Clique em "Novo Fluxo" para criar o primeiro.
+              </p>
+            )}
+
             {botFlows.map((f) => (
               <div key={f.id} className="rounded-2xl bg-card border p-4 space-y-3">
+                {/* Cabeçalho do card: nome/fila + toggle + ações */}
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{f.name}</p>
-                    <p className="text-xs text-muted-foreground">{f.queueName} · {f.steps.length} etapas</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{f.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {f.queueName} · {f.steps.length} etapas
+                    </p>
                   </div>
-                  <Switch checked={f.enabled} onCheckedChange={(v) => {
-                    setBotFlows(prev => prev.map(x => x.id === f.id ? { ...x, enabled: v } : x));
-                  }} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch
+                      checked={f.enabled}
+                      onCheckedChange={(v) => handleToggleBotFlowEnabled(f, v)}
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => handleOpenEditBotFlow(f)}
+                      title="Editar fluxo"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => handleAskDeleteBotFlow(f)}
+                      title="Remover fluxo"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Preview das etapas do fluxo (somente leitura no painel) */}
                 <div className="space-y-2">
                   {f.steps.map((s, i) => (
                     <div key={s.id} className="rounded-xl bg-muted/50 p-3 text-xs">
@@ -1075,6 +1236,54 @@ export default function DeveloperPanel() {
                 <Button onClick={handleEditUser} disabled={editingUser}>
                   {editingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   {editingUser ? 'Atualizando...' : 'Atualizar'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: EDITOR DE FLUXO DO BOT ==================== */}
+      {/*
+        Centraliza criação e edição de BotFlow. Quando `editingBotFlow`
+        é null, o dialog age como criação. Após salvar, o callback
+        handleBotFlowSaved recarrega a lista local para refletir IDs de
+        steps atualizados pelo backend.
+      */}
+      <BotFlowEditorDialog
+        open={showBotFlowDialog}
+        onOpenChange={setShowBotFlowDialog}
+        flow={editingBotFlow}
+        queues={queues}
+        onSaved={handleBotFlowSaved}
+      />
+
+      {/* ==================== DIALOG: CONFIRMAR REMOÇÃO DE FLUXO ==================== */}
+      <Dialog open={showDeleteFlowDialog} onOpenChange={setShowDeleteFlowDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover Fluxo</DialogTitle>
+            <DialogDescription>
+              Esta ação é irreversível. O fluxo e todas as suas etapas serão apagados.
+            </DialogDescription>
+          </DialogHeader>
+          {flowToDelete && (
+            <>
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                <p className="text-sm text-red-700 font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Fluxo: <span className="font-semibold">{flowToDelete.name}</span>
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDeleteFlowDialog(false)}>Cancelar</Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDeleteBotFlow}
+                  disabled={deletingFlow}
+                >
+                  {deletingFlow ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {deletingFlow ? 'Removendo...' : 'Remover Fluxo'}
                 </Button>
               </DialogFooter>
             </>

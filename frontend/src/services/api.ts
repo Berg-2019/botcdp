@@ -259,8 +259,59 @@ export const api = {
     });
   },
 
+  // ============================================================
+  // Fluxos do Bot (BotFlow / BotStep)
+  // ------------------------------------------------------------
+  // Um BotFlow é vinculado a uma fila (queueId) e contém uma lista
+  // ordenada de BotSteps. Cada step tem uma mensagem e opções; cada
+  // opção aponta para outro step (nextStepId) ou transfere o ticket
+  // para outra fila (queueId). O backend executa o fluxo em
+  // ExecuteBotFlowService quando o ticket já tem fila e ainda não
+  // tem atendente humano atribuído.
+  // ============================================================
+
   async getBotFlows(): Promise<BotFlow[]> {
     return request('/api/bot-flows');
+  },
+
+  // Cria um novo fluxo com seus steps/options em uma única chamada.
+  // O backend criará os steps na ordem do array e persistirá options
+  // como JSON em cada step.
+  async createBotFlow(data: {
+    name: string;
+    queueId: number;
+    enabled: boolean;
+    steps: { message: string; options: { label: string; nextStepId?: number; queueId?: number }[] }[];
+  }): Promise<BotFlow> {
+    return request('/api/bot-flows', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Atualiza nome/fila/enabled e substitui completamente os steps
+  // existentes. O backend apaga os steps antigos e recria pela nova
+  // lista — portanto IDs de steps mudam após update.
+  async updateBotFlow(
+    flowId: number,
+    data: {
+      name: string;
+      queueId: number;
+      enabled: boolean;
+      steps: { message: string; options: { label: string; nextStepId?: number; queueId?: number }[] }[];
+    }
+  ): Promise<BotFlow> {
+    return request(`/api/bot-flows/${flowId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Remove o fluxo (e, por cascata, seus steps).
+  async deleteBotFlow(flowId: number): Promise<{ message: string }> {
+    return request(`/api/bot-flows/${flowId}`, {
+      method: 'DELETE',
+    });
   },
 
   async getGeneralSettings(): Promise<GeneralSettings> {

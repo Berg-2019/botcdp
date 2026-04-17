@@ -18,6 +18,7 @@ import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTi
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import CreateContactService from "../services/ContactServices/CreateContactService";
+import ExecuteBotFlowService from "../services/WbotServices/ExecuteBotFlowService";
 
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
 import { MessageType, MessageAck } from "../providers/WhatsApp/types";
@@ -293,19 +294,48 @@ export const handleMessage = async (
 
     await processVcardMessage(processedMessage);
 
-    if (
-      !ticket.queue &&
+    // ------------------------------------------------------------------
+    // Automação pós-recebimento de mensagem.
+    // ------------------------------------------------------------------
+    // Só automatiza quando:
+    //   - A mensagem não veio de grupo (groupContact ausente)
+    //   - Não é mensagem enviada por nós mesmos (fromMe = false)
+    //   - O ticket ainda não foi assumido por um atendente humano
+    //
+    // Etapas:
+    //   1. Se o ticket ainda não tem fila, roda o menu de triagem de
+    //      filas (handleQueueLogic). Isso pode atribuir uma fila já
+    //      nesta iteração — por isso damos reload() para pegar o
+    //      queueId atualizado direto do banco.
+    //   2. Com a fila definida, dispara o ExecuteBotFlowService, que
+    //      decide sozinho entre iniciar o fluxo (primeira vez) ou
+    //      processar a resposta do cliente ao step atual.
+    // ------------------------------------------------------------------
+    const canAutomate =
       !contextPayload.groupContact &&
       !processedMessage.fromMe &&
-      !ticket.userId &&
-      whatsapp.queues.length >= 1
-    ) {
-      await handleQueueLogic(
-        contextPayload.whatsappId,
-        processedMessage.body,
-        ticket,
-        contactPayload
-      );
+      !ticket.userId;
+
+    if (canAutomate) {
+      if (!ticket.queueId && whatsapp.queues.length >= 1) {
+        await handleQueueLogic(
+          contextPayload.whatsappId,
+          processedMessage.body,
+          ticket,
+          contactPayload
+        );
+        // handleQueueLogic usa UpdateTicketService, que só altera no
+        // banco — o objeto `ticket` em memória fica defasado.
+        await ticket.reload();
+      }
+
+      if (ticket.queueId) {
+        await ExecuteBotFlowService(
+          ticket,
+          processedMessage.body,
+          contactPayload
+        );
+      }
     }
   } catch (err) {
     Sentry.captureException(err);
