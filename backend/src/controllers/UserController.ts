@@ -29,14 +29,22 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { email, password, name, profile, queueIds, whatsappId } = req.body;
 
+  // Verifica permissões: 
+  // - Se for signup (/signup), verifica se criação de usuários está habilitada
+  // - Se for criação por admin/developer (/users), verifica se o usuário logado é admin ou developer
   if (
     req.url === "/signup" &&
     (await CheckSettingsHelper("userCreation")) === "disabled"
   ) {
     throw new AppError("ERR_USER_CREATION_DISABLED", 403);
-  } else if (req.url !== "/signup" && req.user.profile !== "admin") {
+  } else if (req.url !== "/signup" && !["admin", "developer"].includes(req.user.profile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
+
+  // Determina se é criação por admin/developer
+  // Admin/Developer cria sem fornecer senha - será gerada automaticamente
+  // O admin/developer depois compartilha um link para o usuário definir sua própria senha
+  const isAdminCreation = req.url === "/users" && ["admin", "developer"].includes(req.user.profile);
 
   const user = await CreateUserService({
     email,
@@ -44,15 +52,31 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     name,
     profile,
     queueIds,
-    whatsappId
+    whatsappId,
+    isAdminCreation
   });
 
+  // Emite evento via Socket.IO para atualizar outros clientes em tempo real
   const io = getIO();
   io.emit("user", {
     action: "create",
     user
   });
 
+  // Se foi criação por admin, prepara a resposta com link de reset
+  if (isAdminCreation && user.resetToken) {
+    // Monta o link de reset de senha para compartilhar com o novo usuário
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const resetLink = `${frontendUrl}/set-password?token=${user.resetToken}`;
+    
+    return res.status(200).json({
+      user,
+      resetToken: user.resetToken,
+      resetLink
+    });
+  }
+
+  // Para criação via signup, retorna apenas os dados do usuário
   return res.status(200).json(user);
 };
 
@@ -68,7 +92,8 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
+  // Permite que admin e developer atualizem usuários
+  if (!["admin", "developer"].includes(req.user.profile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -92,7 +117,8 @@ export const remove = async (
 ): Promise<Response> => {
   const { userId } = req.params;
 
-  if (req.user.profile !== "admin") {
+  // Permite que admin e developer deletem usuários
+  if (!["admin", "developer"].includes(req.user.profile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 

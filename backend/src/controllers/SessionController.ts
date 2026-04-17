@@ -4,6 +4,7 @@ import AppError from "../errors/AppError";
 import AuthUserService from "../services/UserServices/AuthUserService";
 import { SendRefreshToken } from "../helpers/SendRefreshToken";
 import { RefreshTokenService } from "../services/AuthServices/RefreshTokenService";
+import SetPasswordService from "../services/AuthServices/SetPasswordService";
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { email, password } = req.body;
@@ -48,4 +49,15 @@ export const remove = async (
   res.clearCookie("jrt");
 
   return res.send();
+};
+
+export const setPassword = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { token, password } = req.body;
+
+  const result = await SetPasswordService({ token, password });
+
+  return res.status(200).json(result);
 };

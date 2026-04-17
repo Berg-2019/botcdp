@@ -13,4 +13,6 @@ authRoutes.post("/refresh_token", SessionController.update);
 
 authRoutes.delete("/logout", isAuth, SessionController.remove);
 
+authRoutes.post("/set-password", SessionController.setPassword);
+
 export default authRoutes;

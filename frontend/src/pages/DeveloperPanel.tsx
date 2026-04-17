@@ -1,16 +1,33 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import { api } from '@/services/api';
 import { getSocket } from '@/services/socket';
 import { cn } from '@/lib/utils';
+import { getReadableErrorMessage } from '@/utils/errorHandler';
 import {
   MessageSquareText, FolderTree, Users, Bot, Settings, ChevronRight,
   Plus, Wifi, WifiOff, QrCode, RefreshCw, Trash2, Smartphone,
-  BatteryCharging, BatteryMedium, Loader2, CheckCircle2, AlertTriangle,
+  BatteryCharging, BatteryMedium, Loader2, CheckCircle2, AlertTriangle, Copy, Check, Edit,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { GreetingConfig, BotFlow, SystemUser, GeneralSettings, Queue, WhatsappConnection } from '@/types';
 
 type Tab = 'greetings' | 'queues' | 'users' | 'bot' | 'general';
@@ -65,6 +82,23 @@ export default function DeveloperPanel() {
   const [loadingWa, setLoadingWa] = useState(false);
   const [creatingWa, setCreatingWa] = useState(false);
   const [newWaName, setNewWaName] = useState('');
+
+  // Estado do dialog de criar usuário
+  const [showNewUserDialog, setShowNewUserDialog] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [newUserData, setNewUserData] = useState({ name: '', email: '', profile: 'agent' });
+  const [userCreatedData, setUserCreatedData] = useState<{ resetLink: string; resetToken: string } | null>(null);
+  const [copiedText, setCopiedText] = useState(false);
+
+  // Estado do dialog de editar usuário
+  const [showEditUserDialog, setShowEditUserDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState(false);
+  const [editUserData, setEditUserData] = useState<{ id: number; name: string; email: string; profile: string } | null>(null);
+
+  // Estado do dialog de confirmar remoção
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [deletingUser, setDeletingUser] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ id: number; name: string } | null>(null);
 
   // Busca geral de dados ao montar o componente
   useEffect(() => {
@@ -189,6 +223,246 @@ export default function DeveloperPanel() {
     } catch (err) { console.error(err); }
   };
 
+  /**
+   * Manipulador para criar novo usuário
+   * Valida dados, envia para API e aguarda resposta com token de reset
+   * 
+   * Fluxo:
+   * 1. Valida campos obrigatórios (nome e email)
+   * 2. Envia requisição para API (POST /api/users)
+   * 3. Backend gera senha temporária e token JWT
+   * 4. Armazena dados para exibição (link + token)
+   * 5. Recarrega lista de usuários
+   * 6. Mostra mensagens de sucesso/erro via toast
+   */
+  const handleCreateUser = async () => {
+    // PASSO 1: Validação básica de campos obrigatórios
+    const nameTrimmed = newUserData.name.trim();
+    const emailTrimmed = newUserData.email.trim();
+    
+    if (!nameTrimmed || !emailTrimmed) {
+      toast.error('Preencha o nome e email para continuar');
+      return;
+    }
+
+    // PASSO 2: Validação básica de email (formato)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) {
+      toast.error('Por favor, insira um email válido');
+      return;
+    }
+
+    try {
+      setCreatingUser(true);
+
+      // PASSO 3: Envia requisição para criar usuário no backend
+      // Backend retorna: user, resetToken, resetLink
+      // Nota: Backend verifica se usuário logado é admin
+      // Se não for, retorna 403 (Forbidden)
+      const response = await api.createUser({
+        name: nameTrimmed,
+        email: emailTrimmed,
+        profile: newUserData.profile,
+      });
+
+      // PASSO 4: Sucesso - armazena dados para exibição na tela de sucesso
+      setUserCreatedData({ resetLink: response.resetLink, resetToken: response.resetToken });
+      
+      // PASSO 5: Recarrega lista de usuários para refletir o novo usuário criado
+      const usersData = await api.getUsers();
+      setUsers(usersData);
+
+      // PASSO 6: Mostra mensagem de sucesso
+      toast.success(
+        `Usuário "${nameTrimmed}" criado com sucesso! Link de reset foi gerado.`,
+        {
+          description: 'Você pode copiar o link ou token abaixo para compartilhar com o novo usuário.',
+          duration: 5000,
+        }
+      );
+
+    } catch (err) {
+      // PASSO 7: Tratamento de erro - extrai mensagem legível
+      console.error('Erro ao criar usuário:', err);
+      
+      // Extrai a mensagem de erro de forma legível
+      const readableError = getReadableErrorMessage(err);
+      
+      // Mostra toast de erro com mais detalhes
+      toast.error('Erro ao criar usuário', {
+        description: readableError,
+        duration: 6000,
+      });
+
+      // Se for erro de permissão, adiciona informação extra
+      if (readableError.includes('admin') || readableError.includes('permissão')) {
+        console.warn(
+          'ℹ️ Dica: Apenas administradores ou desenvolvedores podem criar usuários. '
+        );
+      }
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  /**
+   * Copia texto para a área de transferência (clipboard)
+   * Mostra feedback visual durante 2 segundos
+   */
+  const handleCopyToClipboard = (text: string) => {
+    // API nativa do navegador para copiar texto
+    navigator.clipboard.writeText(text);
+    // Feedback visual: muda ícone para "check" por 2 segundos
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+  };
+
+  /**
+   * Fecha o dialog de criar usuário e reseta os estados
+   * Chamado ao clicar "Cancelar" ou "Fechar"
+   */
+  const handleCloseUserDialog = () => {
+    setShowNewUserDialog(false);
+    // Limpa formulário
+    setNewUserData({ name: '', email: '', profile: 'agent' });
+    // Limpa dados de sucesso
+    setUserCreatedData(null);
+  };
+
+  /**
+   * Abre o dialog de editar usuário com os dados pré-preenchidos
+   * Comentários em português
+   */
+  const handleOpenEditDialog = (user: SystemUser) => {
+    setEditUserData({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      profile: user.profile,
+    });
+    setShowEditUserDialog(true);
+  };
+
+  /**
+   * Atualiza dados do usuário
+   * Valida campos, envia para API e atualiza a lista
+   * Comentários em português
+   */
+  const handleEditUser = async () => {
+    // PASSO 1: Validação básica de campos obrigatórios
+    if (!editUserData || !editUserData.name.trim() || !editUserData.email.trim()) {
+      toast.error('Preencha o nome e email para continuar');
+      return;
+    }
+
+    // PASSO 2: Validação básica de email (formato)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editUserData.email.trim())) {
+      toast.error('Por favor, insira um email válido');
+      return;
+    }
+
+    try {
+      setEditingUser(true);
+
+      // PASSO 3: Envia requisição para atualizar usuário
+      // Backend valida permissões e atualiza os dados
+      await api.updateUser(editUserData.id, {
+        name: editUserData.name.trim(),
+        email: editUserData.email.trim(),
+        profile: editUserData.profile,
+      });
+
+      // PASSO 4: Recarrega lista de usuários
+      const usersData = await api.getUsers();
+      setUsers(usersData);
+
+      // PASSO 5: Fecha dialog e mostra sucesso
+      setShowEditUserDialog(false);
+      setEditUserData(null);
+
+      toast.success(
+        `Usuário "${editUserData.name}" atualizado com sucesso!`,
+        {
+          duration: 4000,
+        }
+      );
+
+    } catch (err) {
+      // PASSO 6: Tratamento de erro
+      console.error('Erro ao atualizar usuário:', err);
+      const readableError = getReadableErrorMessage(err);
+      
+      toast.error('Erro ao atualizar usuário', {
+        description: readableError,
+        duration: 6000,
+      });
+    } finally {
+      setEditingUser(false);
+    }
+  };
+
+  /**
+   * Fecha o dialog de editar usuário e reseta os estados
+   * Comentários em português
+   */
+  const handleCloseEditDialog = () => {
+    setShowEditUserDialog(false);
+    setEditUserData(null);
+  };
+
+  /**
+   * Abre o dialog de confirmação para remover usuário
+   * Comentários em português
+   */
+  const handleOpenDeleteConfirm = (user: SystemUser) => {
+    setUserToDelete({ id: user.id, name: user.name });
+    setShowDeleteConfirmDialog(true);
+  };
+
+  /**
+   * Confirma e remove o usuário do sistema
+   * Comentários em português
+   */
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+
+    try {
+      setDeletingUser(true);
+
+      // PASSO 1: Envia requisição para remover usuário
+      // Backend valida permissões e remove o usuário
+      await api.deleteUser(userToDelete.id);
+
+      // PASSO 2: Recarrega lista de usuários
+      const usersData = await api.getUsers();
+      setUsers(usersData);
+
+      // PASSO 3: Fecha dialog de confirmação e mostra sucesso
+      setShowDeleteConfirmDialog(false);
+      setUserToDelete(null);
+
+      toast.success(
+        `Usuário "${userToDelete.name}" removido com sucesso!`,
+        {
+          duration: 4000,
+        }
+      );
+
+    } catch (err) {
+      // PASSO 4: Tratamento de erro
+      console.error('Erro ao remover usuário:', err);
+      const readableError = getReadableErrorMessage(err);
+      
+      toast.error('Erro ao remover usuário', {
+        description: readableError,
+        duration: 6000,
+      });
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
@@ -267,7 +541,12 @@ export default function DeveloperPanel() {
           <>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">Usuários</h2>
-              <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="rounded-xl h-8 text-xs"
+                onClick={() => setShowNewUserDialog(true)}
+              >
                 <Plus className="h-3 w-3 mr-1" /> Novo
               </Button>
             </div>
@@ -288,6 +567,27 @@ export default function DeveloperPanel() {
                 )}>
                   {u.profile}
                 </span>
+                {/* Botões de ação: Editar e Remover */}
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0 rounded-lg"
+                    onClick={() => handleOpenEditDialog(u)}
+                    title="Editar usuário"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-8 w-8 p-0 rounded-lg"
+                    onClick={() => handleOpenDeleteConfirm(u)}
+                    title="Remover usuário"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </>
@@ -569,6 +869,260 @@ export default function DeveloperPanel() {
           </>
         )}
       </div>
+
+      {/* 
+        Dialog Modal para Criar Novo Usuário
+        Funciona em dois estágios:
+        1. Estágio 1: Formulário de entrada (name, email, profile)
+        2. Estágio 2: Tela de sucesso (mostra link e token)
+      */}
+      <Dialog open={showNewUserDialog} onOpenChange={setShowNewUserDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Criar Novo Usuário</DialogTitle>
+            <DialogDescription>
+              {/* Alterna mensagem conforme o estágio */}
+              {userCreatedData 
+                ? 'Usuário criado com sucesso! Envie o link de reset de senha para o usuário.'
+                : 'Preencha os dados para criar um novo usuário no sistema'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* ESTÁGIO 1: Formulário de criação */}
+          {!userCreatedData ? (
+            <>
+              <div className="space-y-4">
+                {/* Campo: Nome do Usuário */}
+                <div>
+                  <label className="text-sm font-medium">Nome</label>
+                  <Input
+                    value={newUserData.name}
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Digite o nome"
+                    className="rounded-xl mt-1"
+                  />
+                </div>
+
+                {/* Campo: Email do Usuário */}
+                <div>
+                  <label className="text-sm font-medium">Email</label>
+                  <Input
+                    type="email"
+                    value={newUserData.email}
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="usuario@empresa.com"
+                    className="rounded-xl mt-1"
+                  />
+                </div>
+
+                {/* Campo: Perfil/Cargo do Usuário */}
+                <div>
+                  <label className="text-sm font-medium">Perfil</label>
+                  <Select value={newUserData.profile} onValueChange={(value) => setNewUserData(prev => ({ ...prev, profile: value }))}>
+                    <SelectTrigger className="rounded-xl mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agent">Agente</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="developer">Developer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Botões de ação: Cancelar / Criar */}
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseUserDialog}>Cancelar</Button>
+                <Button onClick={handleCreateUser} disabled={creatingUser}>
+                  {creatingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {creatingUser ? 'Criando...' : 'Criar Usuário'}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              {/* ESTÁGIO 2: Resultado de sucesso com link e token */}
+              <div className="space-y-4">
+                {/* Mensagem de sucesso */}
+                <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+                  <p className="text-sm text-green-700 font-medium flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Usuário criado com sucesso!
+                  </p>
+                </div>
+
+                {/* Campo: Link de Reset de Senha (com botão copiar) */}
+                <div>
+                  <label className="text-sm font-medium">Link de Reset de Senha</label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={userCreatedData.resetLink}
+                      readOnly
+                      className="rounded-xl text-xs bg-muted"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-xl h-10"
+                      onClick={() => handleCopyToClipboard(userCreatedData.resetLink)}
+                    >
+                      {/* Ícone muda conforme clicou no botão: Copy → Check */}
+                      {copiedText ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Copie e compartilhe este link com o novo usuário para que ele possa definir sua senha.
+                  </p>
+                </div>
+
+                {/* Campo: Token Alternativo (backup se o link não funcionar) */}
+                <div>
+                  <label className="text-sm font-medium">Token (alternativo)</label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={userCreatedData.resetToken}
+                      readOnly
+                      className="rounded-xl text-xs bg-muted"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-xl h-10"
+                      onClick={() => handleCopyToClipboard(userCreatedData.resetToken)}
+                    >
+                      {copiedText ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Código alternativo para o usuário usar se preferir.
+                  </p>
+                </div>
+              </div>
+
+              {/* Botão: Fechar Dialog */}
+              <DialogFooter>
+                <Button className="w-full rounded-xl" onClick={handleCloseUserDialog}>Fechar</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: EDITAR USUÁRIO ==================== */}
+      <Dialog open={showEditUserDialog} onOpenChange={setShowEditUserDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>
+              Atualize os dados do usuário no sistema
+            </DialogDescription>
+          </DialogHeader>
+
+          {editUserData && (
+            <>
+              <div className="space-y-4">
+                {/* Campo: Nome do Usuário */}
+                <div>
+                  <label className="text-sm font-medium">Nome</label>
+                  <Input
+                    value={editUserData.name}
+                    onChange={(e) => setEditUserData(prev => prev ? { ...prev, name: e.target.value } : null)}
+                    placeholder="Digite o nome"
+                    className="rounded-xl mt-1"
+                  />
+                </div>
+
+                {/* Campo: Email do Usuário */}
+                <div>
+                  <label className="text-sm font-medium">Email</label>
+                  <Input
+                    type="email"
+                    value={editUserData.email}
+                    onChange={(e) => setEditUserData(prev => prev ? { ...prev, email: e.target.value } : null)}
+                    placeholder="usuario@empresa.com"
+                    className="rounded-xl mt-1"
+                  />
+                </div>
+
+                {/* Campo: Perfil/Cargo do Usuário */}
+                <div>
+                  <label className="text-sm font-medium">Perfil</label>
+                  <Select value={editUserData.profile} onValueChange={(value) => setEditUserData(prev => prev ? { ...prev, profile: value } : null)}>
+                    <SelectTrigger className="rounded-xl mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agent">Agente</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="developer">Developer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Botões de ação: Cancelar / Atualizar */}
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseEditDialog}>Cancelar</Button>
+                <Button onClick={handleEditUser} disabled={editingUser}>
+                  {editingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {editingUser ? 'Atualizando...' : 'Atualizar'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: CONFIRMAR REMOÇÃO ==================== */}
+      <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover Usuário</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja remover este usuário do sistema?
+            </DialogDescription>
+          </DialogHeader>
+
+          {userToDelete && (
+            <>
+              {/* Alerta de confirmação */}
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                <p className="text-sm text-red-700 font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Usuário: <span className="font-semibold">{userToDelete.name}</span>
+                </p>
+              </div>
+
+              {/* Mensagem de aviso */}
+              <div className="text-sm text-muted-foreground">
+                <p>Esta ação não pode ser desfeita. O usuário será permanentemente removido do sistema.</p>
+              </div>
+
+              {/* Botões de ação: Cancelar / Confirmar Remoção */}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDeleteConfirmDialog(false)}>Cancelar</Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                  disabled={deletingUser}
+                >
+                  {deletingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {deletingUser ? 'Removendo...' : 'Remover Usuário'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

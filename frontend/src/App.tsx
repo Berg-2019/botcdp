@@ -14,6 +14,7 @@ import SettingsPage from "./pages/SettingsPage";
 import Contacts from "./pages/Contacts";
 import AdminDashboard from "./pages/AdminDashboard";
 import DeveloperPanel from "./pages/DeveloperPanel";
+import SetPasswordPage from "./pages/SetPasswordPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ function AppRoutes() {
     <>
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to={getHomeRoute(user?.profile)} replace /> : <Login />} />
+        <Route path="/set-password" element={<SetPasswordPage />} />
 
         {/* Rotas de Agente */}
         <Route path="/" element={<ProtectedRoute allowedProfiles={['agent', 'user']}><Index /></ProtectedRoute>} />

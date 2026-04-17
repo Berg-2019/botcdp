@@ -2,7 +2,7 @@ import type { User, Ticket, Message, QuickAnswer, Queue, Contact, DashboardStats
 
 // Ignora a porta 8080 que foi armazenada erroneamente cacheada pelo navegador local.
 const cachedApiUrl = localStorage.getItem('api_url');
-const API_URL = (cachedApiUrl && cachedApiUrl !== 'http://localhost:8080') ? cachedApiUrl : 'http://localhost:8081';
+const API_URL = (cachedApiUrl && cachedApiUrl !== 'http://localhost:8081') ? cachedApiUrl : 'http://localhost:8080';
 
 function getToken(): string | null {
   return localStorage.getItem('token');
@@ -219,6 +219,44 @@ export const api = {
   async getUsers(): Promise<SystemUser[]> {
     const data = await request<{ users: SystemUser[]; count: number }>('/api/users');
     return (data.users || []).map(u => ({ ...u, enabled: true }));
+  },
+
+  // Cria um novo usuário no sistema (apenas admin)
+  // Backend gera automaticamente uma senha temporária e um token de reset
+  // Retorna: user, resetToken (JWT), resetLink (URL completa para compartilhar)
+  async createUser(data: { name: string; email: string; profile: string }): Promise<{ user: SystemUser; resetToken: string; resetLink: string }> {
+    return request('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Redefine a senha do usuário usando um token JWT válido
+  // Chamado pela página de /set-password após usuário definir sua nova senha
+  // Validações: token válido, não expirado, email corresponde
+  async setPassword(data: { token: string; password: string }): Promise<{ message: string }> {
+    return request('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Atualiza dados de um usuário existente
+  // Campos atualizáveis: name, email, profile
+  // Comentários em português
+  async updateUser(userId: number, data: { name?: string; email?: string; profile?: string }): Promise<SystemUser> {
+    return request(`/api/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Remove um usuário do sistema
+  // Comentários em português
+  async deleteUser(userId: number): Promise<{ message: string }> {
+    return request(`/api/users/${userId}`, {
+      method: 'DELETE',
+    });
   },
 
   async getBotFlows(): Promise<BotFlow[]> {
