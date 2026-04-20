@@ -1,5 +1,3 @@
-version: "3"
-
 networks:
   botcdp:
 
@@ -17,34 +15,40 @@ services:
       - JWT_SECRET=${JWT_SECRET:-troque-em-prod-jwt}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-troque-em-prod-refresh}
       - BACKEND_URL=${BACKEND_URL:-http://localhost}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - PROXY_PORT=${PROXY_PORT:-8080}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:9001}
+      - PROXY_PORT=${PROXY_PORT:-9000}
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-whaileys}
       - IO_REDIS_SERVER=redis
       - IO_REDIS_PORT=6379
       - CHROME_ARGS=--no-sandbox --disable-setuid-sandbox
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - ${BACKEND_PORT:-8080}:3000
+      - ${BACKEND_PORT:-9000}:3000
     volumes:
       - ./backend/public/:/usr/src/app/public/
       - ./backend/.wwebjs_auth/:/usr/src/app/.wwebjs_auth/
+    restart: always
     networks:
       - botcdp
 
   frontend:
-    ports:
-      - ${FRONTEND_PORT:-3000}:80
     build:
       context: ./frontend
       dockerfile: ./Dockerfile
+      args:
+        - VITE_API_URL=${BACKEND_URL:-http://localhost}:${BACKEND_PORT:-9000}
+    ports:
+      - ${FRONTEND_PORT:-9001}:80
     environment:
       - URL_BACKEND=backend:3000
-      - REACT_APP_BACKEND_URL=${BACKEND_URL:-http://localhost}:${BACKEND_PORT:-8080}/
+      - REACT_APP_BACKEND_URL=${BACKEND_URL:-http://localhost}:${BACKEND_PORT:-9000}/
     depends_on:
       - backend
+    restart: always
     networks:
       - botcdp
 
@@ -60,6 +64,12 @@ services:
     ports:
       - ${MYSQL_PORT:-3306}:3306
     restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-botcdp123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - botcdp
 
@@ -68,5 +78,10 @@ services:
     restart: always
     volumes:
       - ./.docker/redis/:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - botcdp

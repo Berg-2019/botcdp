@@ -1,7 +1,12 @@
-FROM node:20-alpine as build-deps
+FROM node:20-alpine AS build-deps
+
 WORKDIR /usr/src/app
-COPY package*.json bun.lockb ./
+
+COPY package.json package-lock.json ./
 RUN npm install
+
+ARG VITE_API_URL=http://localhost:9000
+ENV VITE_API_URL=${VITE_API_URL}
 
 COPY . .
 RUN npm run build
