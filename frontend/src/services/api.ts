@@ -1,8 +1,10 @@
 import type { User, Ticket, Message, QuickAnswer, Queue, Contact, DashboardStats, TicketsByQueue, AgentPerformance, VolumeByPeriod, SLAByQueue, GreetingConfig, BotFlow, SystemUser, GeneralSettings, WhatsappConnection } from '@/types';
 
-// Ignora a porta 8080 que foi armazenada erroneamente cacheada pelo navegador local.
+// Base URL da API. Usa valor salvo pelo usuário em "Configurar servidor"
+// (tela de login), caindo no default de desenvolvimento (porta 8081, onde
+// o docker-compose expõe o backend) quando não há valor salvo.
 const cachedApiUrl = localStorage.getItem('api_url');
-const API_URL = (cachedApiUrl && cachedApiUrl !== 'http://localhost:8081') ? cachedApiUrl : 'http://localhost:8080';
+const API_URL = cachedApiUrl || 'http://localhost:8081';
 
 function getToken(): string | null {
   return localStorage.getItem('token');

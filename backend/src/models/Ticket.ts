@@ -9,7 +9,8 @@ import {
   BelongsTo,
   HasMany,
   AutoIncrement,
-  Default
+  Default,
+  DataType
 } from "sequelize-typescript";
 
 import Contact from "./Contact";
@@ -80,22 +81,26 @@ class Ticket extends Model<Ticket> {
   // botInvalidAttempts: contador usado para desistir quando o cliente
   // responde algo que não bate em nenhuma opção do step atual.
   // Ver backend/src/services/WbotServices/ExecuteBotFlowService.ts.
+  //
+  // Nota: como os tipos podem ser null, sequelize-typescript não
+  // consegue inferir o DataType automaticamente via reflect-metadata —
+  // por isso declaramos DataType.INTEGER explicitamente.
   @ForeignKey(() => BotFlow)
-  @Column
+  @Column(DataType.INTEGER)
   botFlowId: number | null;
 
   @BelongsTo(() => BotFlow)
   botFlow: BotFlow;
 
   @ForeignKey(() => BotStep)
-  @Column
+  @Column(DataType.INTEGER)
   botStepId: number | null;
 
   @BelongsTo(() => BotStep)
   botStep: BotStep;
 
   @Default(0)
-  @Column
+  @Column(DataType.INTEGER)
   botInvalidAttempts: number;
 
   @HasMany(() => Message)
