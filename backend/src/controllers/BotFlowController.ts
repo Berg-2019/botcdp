@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Op } from "sequelize";
 import { getIO } from "../libs/socket";
 import AppError from "../errors/AppError";
 import BotFlow from "../models/BotFlow";
@@ -138,6 +139,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError("ERR_BOTFLOW_NAME_REQUIRED", 400);
   }
 
+  if (queueId) {
+    const existing = await BotFlow.findOne({ where: { queueId } });
+    if (existing) {
+      throw new AppError("ERR_BOTFLOW_QUEUE_ALREADY_HAS_FLOW", 400);
+    }
+  }
+
   const flow = await BotFlow.create({ name, queueId, enabled } as any);
 
   if (Array.isArray(steps) && steps.length > 0) {
@@ -194,6 +202,15 @@ export const update = async (
   const flow = await BotFlow.findByPk(flowId);
   if (!flow) {
     throw new AppError("ERR_BOTFLOW_NOT_FOUND", 404);
+  }
+
+  if (queueId && queueId !== flow.queueId) {
+    const existing = await BotFlow.findOne({
+      where: { queueId, id: { [Op.ne]: flow.id } }
+    });
+    if (existing) {
+      throw new AppError("ERR_BOTFLOW_QUEUE_ALREADY_HAS_FLOW", 400);
+    }
   }
 
   await flow.update({ name, queueId, enabled });

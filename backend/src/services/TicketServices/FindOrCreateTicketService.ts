@@ -58,7 +58,10 @@ const FindOrCreateTicketService = async (
       await ticket.update({
         status: "pending",
         userId: null,
-        unreadMessages
+        unreadMessages,
+        botFlowId: null,
+        botStepId: null,
+        botInvalidAttempts: 0
       });
     }
   }

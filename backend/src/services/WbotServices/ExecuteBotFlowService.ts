@@ -46,6 +46,11 @@ import { ContactPayload } from "../../handlers/handleWhatsappEvents";
 // o ticket para atendimento humano.
 const MAX_INVALID_ATTEMPTS = 3;
 
+// Mensagem enviada ao cliente quando o bot encerra o fluxo e libera
+// o ticket para atendimento humano (transição bot → humano).
+const BOT_HANDOFF_MESSAGE =
+  "Aguarde um momento, em breve um de nossos atendentes irá lhe ajudar.";
+
 // Formato canônico de uma opção de step, conforme persistido em
 // BotStep.options (JSON). nextStepId aponta para outro step do mesmo
 // fluxo; queueId transfere o ticket para outra fila (encerrando o
@@ -128,12 +133,30 @@ const getFirstStep = (flow: BotFlow): BotStep | undefined =>
 // (sucesso, cancelamento por tentativas inválidas ou step órfão).
 // Depois disso, o ticket fica como `pending` e pode ser assumido por
 // um atendente humano normalmente.
-const clearBotState = async (ticket: Ticket): Promise<void> => {
+// Quando `notify` é true, envia BOT_HANDOFF_MESSAGE ao cliente para
+// que ele saiba que o bot encerrou e aguarde atendimento humano.
+const clearBotState = async (
+  ticket: Ticket,
+  notify?: { whatsappId: number; contactNumber: string }
+): Promise<void> => {
   await ticket.update({
     botFlowId: null,
     botStepId: null,
     botInvalidAttempts: 0
   });
+
+  if (notify) {
+    try {
+      await whatsappProvider.sendMessage(
+        notify.whatsappId,
+        `${notify.contactNumber}@c.us`,
+        BOT_HANDOFF_MESSAGE
+      );
+    } catch (err) {
+      Sentry.captureException(err);
+      logger.error({ info: "Error sending bot handoff message", err });
+    }
+  }
 };
 
 // Entry point público do service.
@@ -177,10 +200,13 @@ const ExecuteBotFlowService = async (
   // Caso 2: fluxo em andamento — processa a resposta do cliente.
   const currentStep = findStep(flow, ticket.botStepId);
 
+  // Atalho para evitar repetição do contexto de notificação.
+  const notify = { whatsappId: ticket.whatsappId, contactNumber: contact.number };
+
   // Step salvo no ticket não existe mais (pode ter sido deletado numa
-  // edição do fluxo). Reseta estado e libera pro humano.
+  // edição do fluxo). Reseta estado e avisa o cliente.
   if (!currentStep) {
-    await clearBotState(ticket);
+    await clearBotState(ticket, notify);
     return;
   }
 
@@ -188,7 +214,7 @@ const ExecuteBotFlowService = async (
 
   // Step sem opções = fim natural do fluxo (última pergunta, sem menu).
   if (options.length === 0) {
-    await clearBotState(ticket);
+    await clearBotState(ticket, notify);
     return;
   }
 
@@ -200,7 +226,7 @@ const ExecuteBotFlowService = async (
     const attempts = (ticket.botInvalidAttempts || 0) + 1;
 
     if (attempts >= MAX_INVALID_ATTEMPTS) {
-      await clearBotState(ticket);
+      await clearBotState(ticket, notify);
       return;
     }
 
@@ -240,9 +266,9 @@ const ExecuteBotFlowService = async (
   // Opção com nextStepId = avança para o próximo step do mesmo fluxo.
   if (chosen.nextStepId) {
     const nextStep = findStep(flow, chosen.nextStepId);
-    // Referência quebrada (step deletado): encerra o fluxo.
+    // Referência quebrada (step deletado): encerra o fluxo e avisa o cliente.
     if (!nextStep) {
-      await clearBotState(ticket);
+      await clearBotState(ticket, notify);
       return;
     }
 
@@ -256,7 +282,7 @@ const ExecuteBotFlowService = async (
   }
 
   // Opção sem nextStepId e sem queueId = fim do fluxo.
-  await clearBotState(ticket);
+  await clearBotState(ticket, notify);
 };
 
 export default ExecuteBotFlowService;

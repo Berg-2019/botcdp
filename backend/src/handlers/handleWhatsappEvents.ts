@@ -158,6 +158,23 @@ const handleQueueLogic = async (
       ticketData: { queueId: queues[0].id },
       ticketId: ticket.id
     });
+
+    if (queues[0].greetingMessage) {
+      const body = formatBody(
+        `\u200e${queues[0].greetingMessage}`,
+        contactPayload as any
+      );
+      try {
+        await whatsappProvider.sendMessage(
+          whatsappId,
+          `${contactPayload.number}@c.us`,
+          body
+        );
+      } catch (error) {
+        logger.error("Erro ao enviar saudação da fila única:", error);
+      }
+    }
+
     return;
   }
 

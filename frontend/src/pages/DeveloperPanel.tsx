@@ -191,12 +191,25 @@ export default function DeveloperPanel() {
       }
     };
 
+    // O backend emite "botFlow" com { action, botFlow? } ao criar/editar/deletar
+    const handleBotFlow = (data: { action: string; botFlow?: BotFlow; flowId?: number }) => {
+      if (data.action === 'create' && data.botFlow) {
+        setBotFlows(prev => [...prev, data.botFlow!]);
+      } else if (data.action === 'update' && data.botFlow) {
+        setBotFlows(prev => prev.map(f => f.id === data.botFlow!.id ? data.botFlow! : f));
+      } else if (data.action === 'delete' && data.flowId) {
+        setBotFlows(prev => prev.filter(f => f.id !== data.flowId));
+      }
+    };
+
     socket.on('whatsappSession', handleSession);
     socket.on('whatsapp', handleWhatsapp);
+    socket.on('botFlow', handleBotFlow);
 
     return () => {
       socket.off('whatsappSession', handleSession);
       socket.off('whatsapp', handleWhatsapp);
+      socket.off('botFlow', handleBotFlow);
     };
   }, [tab]);
 
