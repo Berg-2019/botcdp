@@ -27,10 +27,12 @@ const SendWhatsAppMedia = async ({
       ? formatBody(body as string, ticket.contact)
       : undefined;
 
+    const fileBuffer = fs.readFileSync(media.path);
+
     const mediaInput = {
-      filename: media.filename,
+      filename: media.originalname || media.filename,
       mimetype: media.mimetype,
-      path: media.path
+      data: fileBuffer
     };
 
     const mediaOptions = {

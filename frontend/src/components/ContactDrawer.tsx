@@ -127,9 +127,11 @@ export function ContactDrawer({ ticket, open, onClose, onUpdate }: Props) {
           </Button>
 
           {/* Close ticket */}
-          <Button variant="outline" size="sm" className="w-full" onClick={handleClose}>
-            <CheckCircle2 className="h-4 w-4 mr-1" /> Resolver Ticket
-          </Button>
+          {ticket.status === 'open' && (
+            <Button variant="outline" size="sm" className="w-full" onClick={handleClose}>
+              <CheckCircle2 className="h-4 w-4 mr-1" /> Resolver Ticket
+            </Button>
+          )}
         </div>
       </SheetContent>
     </Sheet>

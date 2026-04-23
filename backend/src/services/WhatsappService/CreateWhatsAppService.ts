@@ -1,7 +1,7 @@
 import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
-import Whatsapp from "../../models/Whatsapp";
+import Whatsapp, { WHATSAPP_VALID_STATUSES } from "../../models/Whatsapp";
 import AssociateWhatsappQueue from "./AssociateWhatsappQueue";
 
 interface Request {
@@ -48,6 +48,10 @@ const CreateWhatsAppService = async ({
     await schema.validate({ name, status, isDefault });
   } catch (err) {
     throw new AppError(err.message);
+  }
+
+  if (status && !WHATSAPP_VALID_STATUSES.includes(status as any)) {
+    throw new AppError("ERR_INVALID_WHATSAPP_STATUS");
   }
 
   const whatsappFound = await Whatsapp.findOne();

@@ -17,8 +17,21 @@ import Queue from "./Queue";
 import Ticket from "./Ticket";
 import WhatsappQueue from "./WhatsappQueue";
 
+export const WHATSAPP_VALID_STATUSES = [
+  "OPENING",
+  "qrcode",
+  "CONNECTED",
+  "TIMEOUT",
+  "DISCONNECTED",
+  "PAIRING"
+] as const;
+
+export type WhatsappStatus = (typeof WHATSAPP_VALID_STATUSES)[number];
+
 @Table
 class Whatsapp extends Model<Whatsapp> {
+  static VALID_STATUSES = WHATSAPP_VALID_STATUSES;
+
   @PrimaryKey
   @AutoIncrement
   @Column

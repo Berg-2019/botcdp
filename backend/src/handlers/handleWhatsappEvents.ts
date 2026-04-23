@@ -239,6 +239,7 @@ export const handleMessage = async (
   mediaPayload?: MediaPayload
 ): Promise<void> => {
   try {
+    if (messagePayload.fromMe) return;
     const processedMessage = processLocationMessage(messagePayload);
 
     const contact = await CreateOrUpdateContactService({

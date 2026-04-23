@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import type { Ticket } from '@/types';
 import { cn } from '@/lib/utils';
+import { Circle, CheckCircle2, Clock } from 'lucide-react';
 
 function timeAgo(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -12,8 +13,16 @@ function timeAgo(date: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
+const STATUS_CONFIG = {
+  pending: { label: 'Pendente', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
+  open: { label: 'Atendimento', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
+  closed: { label: 'Finalizado', color: 'bg-gray-100 text-gray-500 border-gray-200', icon: Circle },
+};
+
 export function TicketCard({ ticket }: { ticket: Ticket }) {
   const navigate = useNavigate();
+  const statusConfig = STATUS_CONFIG[ticket.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.pending;
+  const StatusIcon = statusConfig.icon;
 
   return (
     <button
@@ -39,14 +48,20 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
             </span>
           )}
         </div>
-        {ticket.queue && (
-          <span
-            className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium text-primary-foreground"
-            style={{ backgroundColor: ticket.queue.color || 'hsl(var(--primary))' }}
-          >
-            {ticket.queue.name}
+        <div className="flex items-center gap-2 mt-1">
+          {ticket.queue && (
+            <span
+              className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium text-primary-foreground"
+              style={{ backgroundColor: ticket.queue.color || 'hsl(var(--primary))' }}
+            >
+              {ticket.queue.name}
+            </span>
+          )}
+          <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border', statusConfig.color)}>
+            <StatusIcon className="h-2.5 w-2.5" />
+            {statusConfig.label}
           </span>
-        )}
+        </div>
       </div>
     </button>
   );

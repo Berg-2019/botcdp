@@ -127,17 +127,55 @@ export const agentPerformance = async (
         })
       ]);
 
-      // Simplified avg response and satisfaction
       const totalClosed = await Ticket.count({
         where: { userId: agent.id, status: "closed" }
       });
+
+      const avgResult = await Message.findAll({
+        attributes: [
+          [
+            fn(
+              "AVG",
+              fn(
+                "TIMESTAMPDIFF",
+                literal("SECOND"),
+                col("ticket.createdAt"),
+                col("Message.createdAt")
+              )
+            ),
+            "avgSeconds"
+          ]
+        ],
+        include: [
+          {
+            model: Ticket,
+            as: "ticket",
+            attributes: [],
+            where: { userId: agent.id }
+          }
+        ],
+        where: { fromMe: true },
+        group: ["ticketId"],
+        order: [["createdAt", "ASC"]],
+        raw: true,
+        subQuery: false
+      });
+
+      let avgResponseMin = 0;
+      if (avgResult.length > 0) {
+        const total = avgResult.reduce(
+          (sum: number, r: any) => sum + (parseFloat(r.avgSeconds) || 0),
+          0
+        );
+        avgResponseMin = Math.round((total / avgResult.length / 60) * 10) / 10;
+      }
 
       return {
         id: agent.id,
         name: agent.name,
         openTickets,
         closedToday,
-        avgResponseMin: 0,
+        avgResponseMin,
         satisfaction: totalClosed > 0 ? Math.min(100, 80 + Math.round(closedToday * 2)) : 0
       };
     })
@@ -185,7 +223,7 @@ export const slaByQueue = async (
   res: Response
 ): Promise<Response> => {
   const queues = await Queue.findAll({ raw: true });
-  const SLA_THRESHOLD_MIN = 15; // first response within 15 min
+  const SLA_THRESHOLD_MIN = 15;
 
   const result = await Promise.all(
     queues.map(async (q: any) => {
@@ -195,12 +233,48 @@ export const slaByQueue = async (
         raw: true
       });
 
+      const firstAgentMessages = await Message.findAll({
+        attributes: [
+          [
+            fn(
+              "AVG",
+              fn(
+                "TIMESTAMPDIFF",
+                literal("SECOND"),
+                col("ticket.createdAt"),
+                col("Message.createdAt")
+              )
+            ),
+            "avgSeconds"
+          ]
+        ],
+        include: [
+          {
+            model: Ticket,
+            as: "ticket",
+            attributes: [],
+            where: { queueId: q.id }
+          }
+        ],
+        where: { fromMe: true },
+        group: ["ticketId"],
+        raw: true,
+        subQuery: false
+      });
+
       let avgFirstResponse = 0;
+      if (firstAgentMessages.length > 0) {
+        const total = firstAgentMessages.reduce(
+          (sum: number, r: any) => sum + (parseFloat(r.avgSeconds) || 0),
+          0
+        );
+        avgFirstResponse = Math.round((total / firstAgentMessages.length / 60) * 10) / 10;
+      }
+
       let avgResolution = 0;
       let withinSLA = 100;
 
       if (closedTickets.length > 0) {
-        // Avg resolution = time from created to closed (updatedAt)
         const totalResMin = closedTickets.reduce((sum: number, t: any) => {
           const diff =
             (new Date(t.updatedAt).getTime() -
@@ -210,16 +284,12 @@ export const slaByQueue = async (
         }, 0);
         avgResolution = Math.round(totalResMin / closedTickets.length);
 
-        // Simplified first response: ~20% of resolution time
-        avgFirstResponse = Math.round(avgResolution * 0.2 * 10) / 10;
-
-        // Within SLA: percentage where estimated first response < threshold
         const within = closedTickets.filter((t: any) => {
           const resMin =
             (new Date(t.updatedAt).getTime() -
               new Date(t.createdAt).getTime()) /
             60000;
-          return resMin * 0.2 <= SLA_THRESHOLD_MIN;
+          return resMin <= SLA_THRESHOLD_MIN;
         }).length;
         withinSLA = Math.round((within / closedTickets.length) * 100);
       }
