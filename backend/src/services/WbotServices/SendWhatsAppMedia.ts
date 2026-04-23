@@ -52,8 +52,6 @@ const SendWhatsAppMedia = async ({
 
     await ticket.update({ lastMessage: body || media.filename });
 
-    fs.unlinkSync(media.path);
-
     return sentMessage;
   } catch (err) {
     console.log(err);

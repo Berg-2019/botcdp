@@ -48,7 +48,24 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   if (medias) {
     await Promise.all(
       medias.map(async (media: Express.Multer.File) => {
-        await SendWhatsAppMedia({ media, ticket });
+        const sentMessage = await SendWhatsAppMedia({ media, ticket, body });
+
+        const [mediaType] = media.mimetype.split("/");
+
+        const messageData = {
+          id: sentMessage.id,
+          ticketId: ticket.id,
+          body: body || media.filename,
+          contactId: ticket.contactId,
+          fromMe: true,
+          read: true,
+          mediaType,
+          mediaUrl: media.filename,
+          ack: sentMessage.ack || 2,
+          quotedMsgId: quotedMsg?.id
+        };
+
+        await CreateMessageService({ messageData });
       })
     );
   } else {
