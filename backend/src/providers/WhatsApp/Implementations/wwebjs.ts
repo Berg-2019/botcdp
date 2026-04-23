@@ -348,7 +348,7 @@ const sendMedia = async (
     ? MessageMedia.fromFilePath(media.path)
     : new MessageMedia(
         media.mimetype,
-        media.data?.toString("base64") || "",
+        media.data ? media.data.toString("base64") : "",
         media.filename
       );
 

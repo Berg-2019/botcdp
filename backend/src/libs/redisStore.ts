@@ -7,10 +7,16 @@ let redisClient: Redis | null = null;
 const REDIS_SESSION_TTL = 604800; // 7 days
 
 export const initRedis = async () => {
-  if (!process.env.REDIS_URL || redisClient) return;
+  const redisUrl =
+    process.env.REDIS_URL ||
+    (process.env.IO_REDIS_SERVER
+      ? `redis://${process.env.IO_REDIS_SERVER}:${process.env.IO_REDIS_PORT || 6379}`
+      : null);
+
+  if (!redisUrl || redisClient) return;
 
   try {
-    redisClient = new Redis(process.env.REDIS_URL, {
+    redisClient = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
       db: parseInt(process.env.REDIS_DB || "0", 10),

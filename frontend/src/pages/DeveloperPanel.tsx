@@ -7,12 +7,14 @@ import { getReadableErrorMessage } from '@/utils/errorHandler';
 import {
   MessageSquareText, FolderTree, Users, Bot, Settings, ChevronRight,
   Plus, Wifi, WifiOff, QrCode, RefreshCw, Trash2, Smartphone,
-  BatteryCharging, BatteryMedium, Loader2, CheckCircle2, AlertTriangle, Copy, Check, Edit,
+  BatteryCharging, BatteryMedium, Loader2, CheckCircle2, AlertTriangle, Copy, Check, Edit, Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -83,6 +85,15 @@ export default function DeveloperPanel() {
   const [loadingWa, setLoadingWa] = useState(false);
   const [creatingWa, setCreatingWa] = useState(false);
   const [newWaName, setNewWaName] = useState('');
+  const [showCreateWaDialog, setShowCreateWaDialog] = useState(false);
+  const [newWaQueues, setNewWaQueues] = useState<number[]>([]);
+  const [newWaGreeting, setNewWaGreeting] = useState('');
+  const [showEditWaDialog, setShowEditWaDialog] = useState(false);
+  const [editingWa, setEditingWa] = useState<WhatsappConnection | null>(null);
+  const [editWaQueues, setEditWaQueues] = useState<number[]>([]);
+  const [editWaGreeting, setEditWaGreeting] = useState('');
+  const [savingWaEdit, setSavingWaEdit] = useState(false);
+  const [availableQueues, setAvailableQueues] = useState<Queue[]>([]);
 
   // Estado do dialog de criar usuário
   const [showNewUserDialog, setShowNewUserDialog] = useState(false);
@@ -110,6 +121,14 @@ export default function DeveloperPanel() {
   const [flowToDelete, setFlowToDelete] = useState<BotFlow | null>(null);
   const [showDeleteFlowDialog, setShowDeleteFlowDialog] = useState(false);
   const [deletingFlow, setDeletingFlow] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [editingQueue, setEditingQueue] = useState<Queue | null>(null);
+  const [savingQueue, setSavingQueue] = useState(false);
+  const [queueForm, setQueueForm] = useState({ name: '', color: '#1F77B4', greetingMessage: '' });
+  const [showDeleteQueueDialog, setShowDeleteQueueDialog] = useState(false);
+  const [queueToDelete, setQueueToDelete] = useState<Queue | null>(null);
+  const [deletingQueue, setDeletingQueue] = useState(false);
 
   // Busca geral de dados ao montar o componente
   useEffect(() => {
@@ -218,13 +237,73 @@ export default function DeveloperPanel() {
     const name = newWaName.trim() || `BotCDP-${Date.now()}`;
     try {
       setCreatingWa(true);
-      const wa = await api.createWhatsapp({ name });
+      const wa = await api.createWhatsapp({ 
+        name, 
+        queueIds: newWaQueues,
+        greetingMessage: newWaGreeting || undefined
+      });
       setWhatsapps(prev => [...prev, wa]);
       setNewWaName('');
+      setNewWaQueues([]);
+      setNewWaGreeting('');
+      setShowCreateWaDialog(false);
     } catch (err) {
       console.error('Erro ao criar conexão:', err);
+      toast.error('Erro ao criar conexão', { description: getReadableErrorMessage(err) });
     } finally {
       setCreatingWa(false);
+    }
+  };
+
+  const openCreateWaDialog = async () => {
+    setShowCreateWaDialog(true);
+    try {
+      const available = await api.getAvailableQueues();
+      setAvailableQueues(available);
+    } catch (err) {
+      console.error('Erro ao buscar filas disponíveis:', err);
+    }
+  };
+
+  const toggleQueue = (queueId: number) => {
+    setNewWaQueues(prev => 
+      prev.includes(queueId) 
+        ? prev.filter(id => id !== queueId)
+        : [...prev, queueId]
+    );
+  };
+
+  const openEditWaDialog = async (wa: WhatsappConnection) => {
+    setEditingWa(wa);
+    setEditWaQueues(wa.queues.map(q => q.id));
+    setEditWaGreeting(wa.greetingMessage || '');
+    setShowEditWaDialog(true);
+  };
+
+  const toggleEditWaQueue = (queueId: number) => {
+    setEditWaQueues(prev => 
+      prev.includes(queueId) 
+        ? prev.filter(id => id !== queueId)
+        : [...prev, queueId]
+    );
+  };
+
+  const handleSaveWaEdit = async () => {
+    if (!editingWa) return;
+    try {
+      setSavingWaEdit(true);
+      const updated = await api.updateWhatsapp(editingWa.id, {
+        queueIds: editWaQueues,
+        greetingMessage: editWaGreeting || undefined,
+      });
+      setWhatsapps(prev => prev.map(w => w.id === updated.id ? updated : w));
+      setShowEditWaDialog(false);
+      toast.success('Conexão atualizada!');
+    } catch (err) {
+      console.error('Erro ao atualizar conexão:', err);
+      toast.error('Erro ao atualizar conexão', { description: getReadableErrorMessage(err) });
+    } finally {
+      setSavingWaEdit(false);
     }
   };
 
@@ -592,6 +671,85 @@ export default function DeveloperPanel() {
     }
   };
 
+  const handleSaveSettings = async () => {
+    try {
+      setSavingSettings(true);
+      await api.updateGeneralSettings(settings);
+      toast.success('Configurações salvas com sucesso!');
+    } catch (err) {
+      console.error('Erro ao salvar configurações:', err);
+      toast.error('Erro ao salvar configurações', { description: getReadableErrorMessage(err) });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleOpenQueueDialog = (queue?: Queue) => {
+    if (queue) {
+      setEditingQueue(queue);
+      setQueueForm({ name: queue.name, color: queue.color, greetingMessage: queue.greetingMessage || '' });
+    } else {
+      setEditingQueue(null);
+      setQueueForm({ name: '', color: '#1F77B4', greetingMessage: '' });
+    }
+    setShowQueueDialog(true);
+  };
+
+  const handleSaveQueue = async () => {
+    if (!queueForm.name.trim()) {
+      toast.error('Digite o nome do setor');
+      return;
+    }
+    try {
+      setSavingQueue(true);
+      if (editingQueue) {
+        await api.updateQueue(editingQueue.id, queueForm);
+        toast.success('Setor atualizado!');
+      } else {
+        await api.createQueue(queueForm);
+        toast.success('Setor criado!');
+      }
+      const queuesData = await api.getQueues();
+      setQueues(queuesData);
+      setShowQueueDialog(false);
+    } catch (err) {
+      console.error('Erro ao salvar setor:', err);
+      toast.error('Erro ao salvar setor', { description: getReadableErrorMessage(err) });
+    } finally {
+      setSavingQueue(false);
+    }
+  };
+
+  const handleDeleteQueue = async () => {
+    if (!queueToDelete) return;
+    try {
+      setDeletingQueue(true);
+      await api.deleteQueue(queueToDelete.id);
+      const queuesData = await api.getQueues();
+      setQueues(queuesData);
+      setShowDeleteQueueDialog(false);
+      setQueueToDelete(null);
+      toast.success('Setor removido!');
+    } catch (err) {
+      console.error('Erro ao remover setor:', err);
+      toast.error('Erro ao remover setor', { description: getReadableErrorMessage(err) });
+    } finally {
+      setDeletingQueue(false);
+    }
+  };
+
+  const handleSaveGreeting = async (queueId: number, message: string, enabled: boolean) => {
+    try {
+      await api.updateGreeting(queueId, { message, enabled });
+      toast.success('Saudação salva!');
+      const greetingsData = await api.getGreetings();
+      setGreetings(greetingsData);
+    } catch (err) {
+      console.error('Erro ao salvar saudação:', err);
+      toast.error('Erro ao salvar saudação', { description: getReadableErrorMessage(err) });
+    }
+  };
+
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
@@ -624,17 +782,19 @@ export default function DeveloperPanel() {
           <>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">Mensagens de Saudação</h2>
-              <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">
-                <Plus className="h-3 w-3 mr-1" /> Nova
-              </Button>
             </div>
             {greetings.map((g) => (
               <div key={g.id} className="rounded-2xl bg-card border p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">{g.queueName}</span>
-                  <Switch checked={g.enabled} onCheckedChange={(v) => {
-                    setGreetings(prev => prev.map(x => x.id === g.id ? { ...x, enabled: v } : x));
-                  }} />
+                  <div className="flex items-center gap-2">
+                    <Switch checked={g.enabled} onCheckedChange={(v) => {
+                      setGreetings(prev => prev.map(x => x.id === g.id ? { ...x, enabled: v } : x));
+                    }} />
+                    <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs" onClick={() => handleSaveGreeting(g.id, g.message, g.enabled)}>
+                      Salvar
+                    </Button>
+                  </div>
                 </div>
                 <Textarea
                   value={g.message}
@@ -651,7 +811,7 @@ export default function DeveloperPanel() {
           <>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">Setores / Filas</h2>
-              <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">
+              <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs" onClick={() => { setEditingQueue(null); setShowQueueDialog(true); }}>
                 <Plus className="h-3 w-3 mr-1" /> Novo Setor
               </Button>
             </div>
@@ -659,7 +819,12 @@ export default function DeveloperPanel() {
               <div key={q.id} className="rounded-2xl bg-card border p-4 flex items-center gap-3">
                 <div className="h-4 w-4 rounded-full" style={{ backgroundColor: q.color }} />
                 <span className="text-sm font-medium flex-1">{q.name}</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditingQueue(q); setShowQueueDialog(true); }} title="Editar setor">
+                  <Edit className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { setQueueToDelete(q); setShowDeleteQueueDialog(true); }} title="Remover setor">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))}
           </>
@@ -743,30 +908,18 @@ export default function DeveloperPanel() {
               </Button>
             </div>
 
-            {/* Formulário de nova conexão */}
-            <div className="rounded-2xl bg-card border p-4 space-y-3">
-              <p className="text-xs text-muted-foreground">
+            {/* Botão para criar nova conexão */}
+            <div className="rounded-2xl bg-card border p-4">
+              <p className="text-xs text-muted-foreground mb-3">
                 Crie uma nova instância de conexão para parear com o WhatsApp do bot.
               </p>
-              <div className="flex gap-2">
-                <Input
-                  value={newWaName}
-                  onChange={(e) => setNewWaName(e.target.value)}
-                  placeholder="Nome da conexão (ex: BotCDP Principal)"
-                  className="h-9 rounded-xl text-sm flex-1"
-                />
-                <Button
-                  size="sm"
-                  className="rounded-xl h-9 text-xs px-4"
-                  onClick={handleCreateWhatsapp}
-                  disabled={creatingWa}
-                >
-                  {creatingWa
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <><Plus className="h-3 w-3 mr-1" /> Nova</>
-                  }
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                className="rounded-xl h-9 text-xs"
+                onClick={openCreateWaDialog}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Nova Conexão
+              </Button>
             </div>
 
             {/* Lista de conexões */}
@@ -867,14 +1020,24 @@ export default function DeveloperPanel() {
                         <Loader2 className="h-3 w-3 animate-spin" /> Processando...
                       </span>
                     )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="rounded-xl h-8 text-xs text-destructive hover:text-destructive ml-auto"
-                      onClick={() => handleDelete(wa.id)}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                    </Button>
+                    <div className="ml-auto flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-xl h-8 text-xs text-muted-foreground hover:text-primary"
+                        onClick={() => openEditWaDialog(wa)}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" /> Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-xl h-8 text-xs text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(wa.id)}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1038,7 +1201,10 @@ export default function DeveloperPanel() {
                 />
               </div>
 
-              <Button className="w-full rounded-xl h-10">Salvar Configurações</Button>
+              <Button className="w-full rounded-xl h-10" onClick={handleSaveSettings} disabled={savingSettings}>
+                {savingSettings ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {savingSettings ? 'Salvando...' : 'Salvar Configurações'}
+              </Button>
             </div>
           </>
         )}
@@ -1343,6 +1509,293 @@ export default function DeveloperPanel() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: CRIAR CONEXÃO WHATSAPP ==================== */}
+      <Dialog open={showCreateWaDialog} onOpenChange={setShowCreateWaDialog}>
+        <DialogContent className="rounded-3xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Conexão WhatsApp</DialogTitle>
+            <DialogDescription>
+              Configure a conexão e associe os setores que serão atendidos por estebot.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Nome da conexão */}
+            <div>
+              <Label className="text-sm font-medium">Nome da conexão</Label>
+              <Input
+                value={newWaName}
+                onChange={(e) => setNewWaName(e.target.value)}
+                placeholder="Ex: BotCDP Principal"
+                className="rounded-xl mt-1"
+              />
+            </div>
+
+            {/* Seleção de setores */}
+            <div>
+              <Label className="text-sm font-medium">Setores associados</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Selecione os setores que serão atendidos por esta conexão. Uma setor não pode estar em mais de uma conexão.
+              </p>
+              <div className="space-y-2 max-h-48 overflow-y-auto rounded-xl border p-2">
+                {queues.map((queue) => {
+                  const isUsed = whatsapps.some(wa => wa.queues.some(q => q.id === queue.id));
+                  const isSelected = newWaQueues.includes(queue.id);
+                  return (
+                    <div
+                      key={queue.id}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg p-2 text-sm",
+                        isUsed && !isSelected && "opacity-50"
+                      )}
+                    >
+                      <Checkbox
+                        id={`queue-${queue.id}`}
+                        checked={isSelected}
+                        disabled={isUsed && !isSelected}
+                        onCheckedChange={() => toggleQueue(queue.id)}
+                      />
+                      <Label
+                        htmlFor={`queue-${queue.id}`}
+                        className={cn(
+                          "flex-1 cursor-pointer font-normal",
+                          isUsed && !isSelected && "text-muted-foreground line-through"
+                        )}
+                      >
+                        {queue.name}
+                      </Label>
+                      {isUsed && !isSelected && (
+                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                          Em uso
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Mensagem de saudação (obrigatório se 2+ setores) */}
+            {newWaQueues.length >= 2 && (
+              <div>
+                <Label className="text-sm font-medium">Mensagem de saudação</Label>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Esta mensagem será mostrada antes do menu de escolha de setor.
+                </p>
+                <Textarea
+                  value={newWaGreeting}
+                  onChange={(e) => setNewWaGreeting(e.target.value)}
+                  placeholder="Ex: Olá! Bem-vindo ao BotCDP. Como podemos ajudar?"
+                  className="rounded-xl text-sm"
+                  rows={2}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateWaDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateWhatsapp}
+              disabled={creatingWa || (newWaQueues.length >= 2 && !newWaGreeting.trim())}
+            >
+              {creatingWa ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {creatingWa ? 'Criando...' : 'Criar Conexão'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: EDITAR CONEXÃO WHATSAPP ==================== */}
+      <Dialog open={showEditWaDialog} onOpenChange={setShowEditWaDialog}>
+        <DialogContent className="rounded-3xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Conexão WhatsApp</DialogTitle>
+            <DialogDescription>
+              Atualize os setores e a mensagem de saudação desta conexão.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Nome da conexão (somente leitura) */}
+            <div>
+              <Label className="text-sm font-medium">Nome da conexão</Label>
+              <Input
+                value={editingWa?.name || ''}
+                disabled
+                className="rounded-xl mt-1 bg-muted"
+              />
+            </div>
+
+            {/* Seleção de setores */}
+            <div>
+              <Label className="text-sm font-medium">Setores associados</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Selecione os setores que serão atendidos por esta conexão. Uma setor não pode estar em mais de uma conexão.
+              </p>
+              <div className="space-y-2 max-h-48 overflow-y-auto rounded-xl border p-2">
+                {queues.map((queue) => {
+                  const isUsed = whatsapps.some(wa => wa.queues.some(q => q.id === queue.id) && wa.id !== editingWa?.id);
+                  const isSelected = editWaQueues.includes(queue.id);
+                  return (
+                    <div
+                      key={queue.id}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg p-2 text-sm",
+                        isUsed && !isSelected && "opacity-50"
+                      )}
+                    >
+                      <Checkbox
+                        id={`edit-queue-${queue.id}`}
+                        checked={isSelected}
+                        disabled={isUsed && !isSelected}
+                        onCheckedChange={() => toggleEditWaQueue(queue.id)}
+                      />
+                      <Label
+                        htmlFor={`edit-queue-${queue.id}`}
+                        className={cn(
+                          "flex-1 cursor-pointer font-normal",
+                          isUsed && !isSelected && "text-muted-foreground line-through"
+                        )}
+                      >
+                        {queue.name}
+                      </Label>
+                      {isUsed && !isSelected && (
+                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                          Em uso
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Mensagem de saudação (obrigatório se 2+ setores) */}
+            {editWaQueues.length >= 2 && (
+              <div>
+                <Label className="text-sm font-medium">Mensagem de saudação</Label>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Esta mensagem será mostrada antes do menu de escolha de setor.
+                </p>
+                <Textarea
+                  value={editWaGreeting}
+                  onChange={(e) => setEditWaGreeting(e.target.value)}
+                  placeholder="Ex: Olá! Bem-vindo ao BotCDP. Como podemos ajudar?"
+                  className="rounded-xl text-sm"
+                  rows={2}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditWaDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveWaEdit}
+              disabled={savingWaEdit || (editWaQueues.length >= 2 && !editWaGreeting.trim())}
+            >
+              {savingWaEdit ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {savingWaEdit ? 'Salvando...' : 'Salvar Alterações'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: CRIAR/EDITAR SETOR ==================== */}
+      <Dialog open={showQueueDialog} onOpenChange={setShowQueueDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{editingQueue ? 'Editar Setor' : 'Novo Setor'}</DialogTitle>
+            <DialogDescription>
+              Configure o nome, cor e mensagem de saudação do setor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Nome do setor</Label>
+              <Input
+                value={queueForm.name}
+                onChange={(e) => setQueueForm({ ...queueForm, name: e.target.value })}
+                placeholder="Ex: Financeiro"
+                className="rounded-xl mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Cor</Label>
+              <div className="flex gap-2 mt-1 items-center">
+                <Input
+                  type="color"
+                  value={queueForm.color}
+                  onChange={(e) => setQueueForm({ ...queueForm, color: e.target.value })}
+                  className="h-10 w-14 rounded-xl p-1"
+                />
+                <Input
+                  value={queueForm.color}
+                  onChange={(e) => setQueueForm({ ...queueForm, color: e.target.value })}
+                  placeholder="#1F77B4"
+                  className="rounded-xl flex-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Mensagem de saudação</Label>
+              <Textarea
+                value={queueForm.greetingMessage}
+                onChange={(e) => setQueueForm({ ...queueForm, greetingMessage: e.target.value })}
+                placeholder="Mensagem enviada automaticamente quando cliente for para este setor"
+                className="rounded-xl mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQueueDialog(false)}>Cancelar</Button>
+            <Button onClick={handleSaveQueue} disabled={savingQueue}>
+              {savingQueue ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {savingQueue ? 'Salvando...' : editingQueue ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: CONFIRMAR REMOÇÃO DE SETOR ==================== */}
+      <Dialog open={showDeleteQueueDialog} onOpenChange={setShowDeleteQueueDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover Setor</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja remover este setor? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+
+          {queueToDelete && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-700 font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Setor: <span className="font-semibold">{queueToDelete.name}</span>
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteQueueDialog(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteQueue} disabled={deletingQueue}>
+              {deletingQueue ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {deletingQueue ? 'Removendo...' : 'Remover'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -53,13 +53,13 @@ const UpdateUserService = async ({
     throw new AppError(err.message);
   }
 
-  await user.update({
-    email,
-    password,
-    profile,
-    name,
-    whatsappId: whatsappId ? whatsappId : null
-  });
+  const updateData: Record<string, any> = {};
+  if (email !== undefined) updateData.email = email;
+  if (name !== undefined) updateData.name = name;
+  if (profile !== undefined) updateData.profile = profile;
+  if (whatsappId !== undefined) updateData.whatsappId = whatsappId ? whatsappId : null;
+
+  await user.update(updateData);
 
   await user.$set("queues", queueIds);
 

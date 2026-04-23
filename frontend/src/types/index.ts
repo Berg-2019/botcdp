@@ -42,7 +42,7 @@ export interface Ticket {
 }
 
 export interface Message {
-  id: number;
+  id: number | string;
   body: string;
   read: boolean;
   fromMe: boolean;

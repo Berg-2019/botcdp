@@ -2,7 +2,7 @@ import * as Yup from "yup";
 import { Op } from "sequelize";
 
 import AppError from "../../errors/AppError";
-import Whatsapp from "../../models/Whatsapp";
+import Whatsapp, { WHATSAPP_VALID_STATUSES } from "../../models/Whatsapp";
 import ShowWhatsAppService from "./ShowWhatsAppService";
 import AssociateWhatsappQueue from "./AssociateWhatsappQueue";
 
@@ -50,6 +50,10 @@ const UpdateWhatsAppService = async ({
     await schema.validate({ name, status, isDefault });
   } catch (err) {
     throw new AppError(err.message);
+  }
+
+  if (status && !WHATSAPP_VALID_STATUSES.includes(status as any)) {
+    throw new AppError("ERR_INVALID_WHATSAPP_STATUS");
   }
 
   if (queueIds.length > 1 && !greetingMessage) {

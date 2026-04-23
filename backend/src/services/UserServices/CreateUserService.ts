@@ -34,7 +34,7 @@ const CreateUserService = async ({
   password,
   name,
   queueIds = [],
-  profile = "admin",
+  profile = "agent",
   whatsappId,
   isAdminCreation = false
 }: Request): Promise<Response> => {

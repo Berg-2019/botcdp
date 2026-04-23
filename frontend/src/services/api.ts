@@ -4,7 +4,7 @@ import type { User, Ticket, Message, QuickAnswer, Queue, Contact, DashboardStats
 // (tela de login), caindo no default de desenvolvimento (porta 8081, onde
 // o docker-compose expõe o backend) quando não há valor salvo.
 const cachedApiUrl = localStorage.getItem('api_url');
-const API_URL = cachedApiUrl || 'http://localhost:8081';
+const API_URL = cachedApiUrl || 'http://localhost:8080';
 
 function getToken(): string | null {
   return localStorage.getItem('token');
@@ -173,6 +173,37 @@ export const api = {
     return request('/api/queue');
   },
 
+  async getAvailableQueues(): Promise<Queue[]> {
+    return request('/api/queue/available');
+  },
+
+  async createQueue(data: { name: string; color: string; greetingMessage?: string }): Promise<Queue> {
+    return request('/api/queue', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateQueue(queueId: number, data: { name?: string; color?: string; greetingMessage?: string }): Promise<Queue> {
+    return request(`/api/queue/${queueId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteQueue(queueId: number): Promise<{ message: string }> {
+    return request(`/api/queue/${queueId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async updateGreeting(queueId: number, data: { message: string; enabled: boolean }): Promise<GreetingConfig> {
+    return request(`/api/greetings/${queueId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
   async transferTicket(ticketId: number, queueId: number, userId?: number): Promise<Ticket> {
     return request(`/api/tickets/${ticketId}`, {
       method: 'PUT',
@@ -333,9 +364,16 @@ export const api = {
     return request('/api/whatsapp');
   },
 
-  async createWhatsapp(data: { name: string; queueIds?: number[]; isDefault?: boolean }): Promise<WhatsappConnection> {
+  async createWhatsapp(data: { name: string; queueIds?: number[]; isDefault?: boolean; greetingMessage?: string }): Promise<WhatsappConnection> {
     return request('/api/whatsapp', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateWhatsapp(id: number, data: { name?: string; queueIds?: number[]; isDefault?: boolean; greetingMessage?: string }): Promise<WhatsappConnection> {
+    return request(`/api/whatsapp/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },

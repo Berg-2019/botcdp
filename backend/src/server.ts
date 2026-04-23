@@ -5,8 +5,10 @@ import { logger } from "./utils/logger";
 import { initRedis } from "./libs/redisStore";
 import { StartAllWhatsAppsSessions } from "./services/WbotServices/StartAllWhatsAppsSessions";
 
-const server = app.listen(process.env.PORT, () => {
-  logger.info(`Servidor iniciado na porta: ${process.env.PORT}`);
+const PORT = process.env.PORT || 3000;
+
+const server = app.listen(PORT, () => {
+  logger.info(`Servidor iniciado na porta: ${PORT}`);
 });
 
 initIO(server);

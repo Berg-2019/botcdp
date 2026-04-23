@@ -25,7 +25,7 @@ export const generatePasswordResetToken = (userId: number, email: string): strin
 
   // Gera o token JWT com expiração de 24 horas
   // Após 24h, o token se torna inválido
-  const token = jwt.sign(payload, config.secret, {
+  const token = jwt.sign(payload, config.resetSecret as string, {
     expiresIn: "24h",
   });
 
@@ -40,7 +40,7 @@ export const generatePasswordResetToken = (userId: number, email: string): strin
 export const verifyPasswordResetToken = (token: string): ResetTokenPayload | null => {
   try {
     // Valida o token e decodifica o payload
-    const decoded = jwt.verify(token, config.secret) as ResetTokenPayload;
+    const decoded = jwt.verify(token, config.resetSecret as string) as ResetTokenPayload;
     
     // Verifica se é realmente um token de reset de senha
     if (decoded.type !== "password_reset") {
