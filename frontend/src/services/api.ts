@@ -364,14 +364,14 @@ export const api = {
     return request('/api/whatsapp');
   },
 
-  async createWhatsapp(data: { name: string; queueIds?: number[]; isDefault?: boolean; greetingMessage?: string }): Promise<WhatsappConnection> {
+  async createWhatsapp(data: { name: string; queueIds?: number[]; isDefault?: boolean; greetingMessage?: string; farewellMessage?: string }): Promise<WhatsappConnection> {
     return request('/api/whatsapp', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
-  async updateWhatsapp(id: number, data: { name?: string; queueIds?: number[]; isDefault?: boolean; greetingMessage?: string }): Promise<WhatsappConnection> {
+  async updateWhatsapp(id: number, data: { name?: string; queueIds?: number[]; isDefault?: boolean; greetingMessage?: string; farewellMessage?: string }): Promise<WhatsappConnection> {
     return request(`/api/whatsapp/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),

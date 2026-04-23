@@ -88,10 +88,12 @@ export default function DeveloperPanel() {
   const [showCreateWaDialog, setShowCreateWaDialog] = useState(false);
   const [newWaQueues, setNewWaQueues] = useState<number[]>([]);
   const [newWaGreeting, setNewWaGreeting] = useState('');
+  const [newWaFarewell, setNewWaFarewell] = useState('');
   const [showEditWaDialog, setShowEditWaDialog] = useState(false);
   const [editingWa, setEditingWa] = useState<WhatsappConnection | null>(null);
   const [editWaQueues, setEditWaQueues] = useState<number[]>([]);
   const [editWaGreeting, setEditWaGreeting] = useState('');
+  const [editWaFarewell, setEditWaFarewell] = useState('');
   const [savingWaEdit, setSavingWaEdit] = useState(false);
   const [availableQueues, setAvailableQueues] = useState<Queue[]>([]);
 
@@ -237,15 +239,17 @@ export default function DeveloperPanel() {
     const name = newWaName.trim() || `BotCDP-${Date.now()}`;
     try {
       setCreatingWa(true);
-      const wa = await api.createWhatsapp({ 
-        name, 
+      const wa = await api.createWhatsapp({
+        name,
         queueIds: newWaQueues,
-        greetingMessage: newWaGreeting || undefined
+        greetingMessage: newWaGreeting || undefined,
+        farewellMessage: newWaFarewell || undefined,
       });
       setWhatsapps(prev => [...prev, wa]);
       setNewWaName('');
       setNewWaQueues([]);
       setNewWaGreeting('');
+      setNewWaFarewell('');
       setShowCreateWaDialog(false);
     } catch (err) {
       console.error('Erro ao criar conexão:', err);
@@ -277,6 +281,7 @@ export default function DeveloperPanel() {
     setEditingWa(wa);
     setEditWaQueues(wa.queues.map(q => q.id));
     setEditWaGreeting(wa.greetingMessage || '');
+    setEditWaFarewell(wa.farewellMessage || '');
     setShowEditWaDialog(true);
   };
 
@@ -295,6 +300,7 @@ export default function DeveloperPanel() {
       const updated = await api.updateWhatsapp(editingWa.id, {
         queueIds: editWaQueues,
         greetingMessage: editWaGreeting || undefined,
+        farewellMessage: editWaFarewell || undefined,
       });
       setWhatsapps(prev => prev.map(w => w.id === updated.id ? updated : w));
       setShowEditWaDialog(false);
@@ -1594,6 +1600,21 @@ export default function DeveloperPanel() {
                 />
               </div>
             )}
+
+            {/* Mensagem de encerramento */}
+            <div>
+              <Label className="text-sm font-medium">Mensagem de encerramento</Label>
+              <p className="text-xs text-muted-foreground mb-1">
+                Enviada automaticamente ao cliente quando um ticket for encerrado.
+              </p>
+              <Textarea
+                value={newWaFarewell}
+                onChange={(e) => setNewWaFarewell(e.target.value)}
+                placeholder="Ex: Obrigado pelo contato! Até logo."
+                className="rounded-xl text-sm"
+                rows={2}
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -1692,6 +1713,21 @@ export default function DeveloperPanel() {
                 />
               </div>
             )}
+
+            {/* Mensagem de encerramento */}
+            <div>
+              <Label className="text-sm font-medium">Mensagem de encerramento</Label>
+              <p className="text-xs text-muted-foreground mb-1">
+                Enviada automaticamente ao cliente quando um ticket for encerrado.
+              </p>
+              <Textarea
+                value={editWaFarewell}
+                onChange={(e) => setEditWaFarewell(e.target.value)}
+                placeholder="Ex: Obrigado pelo contato! Até logo."
+                className="rounded-xl text-sm"
+                rows={2}
+              />
+            </div>
           </div>
 
           <DialogFooter>
