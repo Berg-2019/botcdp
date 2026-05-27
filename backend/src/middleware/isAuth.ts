@@ -31,7 +31,7 @@ const isAuth = (req: Request, res: Response, next: NextFunction): void => {
     };
   } catch (err) {
     throw new AppError(
-      "Invalid token. We'll try to assign a new one on next request",
+      "ERR_SESSION_EXPIRED",
       403
     );
   }

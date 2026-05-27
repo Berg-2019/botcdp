@@ -3,5 +3,5 @@ export default {
   expiresIn: "15m",
   refreshSecret: process.env.JWT_REFRESH_SECRET as string,
   refreshExpiresIn: "7d",
-  resetSecret: (process.env.JWT_RESET_SECRET || process.env.JWT_SECRET) as string
+  resetSecret: process.env.JWT_RESET_SECRET as string
 };

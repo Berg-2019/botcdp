@@ -74,7 +74,9 @@ export const update = async (
   res: Response
 ): Promise<Response> => {
   const { whatsappId } = req.params;
-  const whatsappData = req.body;
+  const { name, status, isDefault, greetingMessage, farewellMessage, queueIds }: WhatsappData = req.body;
+
+  const whatsappData: WhatsappData = { name, status, isDefault, greetingMessage, farewellMessage, queueIds };
 
   const { whatsapp, oldDefaultWhatsapp } = await UpdateWhatsAppService({
     whatsappData,
