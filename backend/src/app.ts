@@ -18,6 +18,8 @@ Sentry.init({ dsn: process.env.SENTRY_DSN });
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     credentials: true,

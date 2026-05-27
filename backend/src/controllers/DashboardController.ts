@@ -170,13 +170,26 @@ export const agentPerformance = async (
         avgResponseMin = Math.round((total / avgResult.length / 60) * 10) / 10;
       }
 
+      const ratingResult = await Ticket.findOne({
+        attributes: [
+          [fn("AVG", col("rating")), "avg"],
+          [fn("COUNT", col("rating")), "total"]
+        ],
+        where: { userId: agent.id, status: "closed", rating: { [Op.ne]: null as any } },
+        raw: true
+      }) as any;
+
+      const averageRating = ratingResult?.avg ? Math.round(parseFloat(ratingResult.avg) * 10) / 10 : 0;
+      const totalRatings = parseInt(ratingResult?.total ?? "0", 10);
+
       return {
         id: agent.id,
         name: agent.name,
         openTickets,
         closedToday,
         avgResponseMin,
-        satisfaction: totalClosed > 0 ? Math.min(100, 80 + Math.round(closedToday * 2)) : 0
+        averageRating,
+        totalRatings
       };
     })
   );

@@ -39,6 +39,8 @@ export interface Ticket {
   contact: Contact;
   queue?: Queue;
   user?: { id: number; name: string };
+  rating?: number | null;
+  ratingComment?: string | null;
 }
 
 export interface Message {
@@ -83,7 +85,8 @@ export interface AgentPerformance {
   openTickets: number;
   closedToday: number;
   avgResponseMin: number;
-  satisfaction: number; // 0-100
+  averageRating: number; // 0-5
+  totalRatings: number;
 }
 
 export interface VolumeByPeriod {

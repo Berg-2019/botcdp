@@ -2,6 +2,8 @@ import { join } from "path";
 import { promisify } from "util";
 import { writeFile } from "fs";
 import * as Sentry from "@sentry/node";
+import { subHours } from "date-fns";
+import { Op } from "sequelize";
 
 import { getIO } from "../libs/socket";
 import { logger } from "../utils/logger";
@@ -268,6 +270,36 @@ export const handleMessage = async (
       formatBody(whatsapp.farewellMessage, contact) === processedMessage.body
     ) {
       return;
+    }
+
+    // Captura de nota de atendimento: se o cliente responde 1-5 e há um
+    // ticket fechado nas últimas 24h sem nota, registra a avaliação e encerra.
+    const ratingValue = parseInt(processedMessage.body.trim(), 10);
+    if (!isNaN(ratingValue) && ratingValue >= 1 && ratingValue <= 5) {
+      const ratedTicket = await Ticket.findOne({
+        where: {
+          contactId: contact.id,
+          whatsappId: contextPayload.whatsappId,
+          status: "closed",
+          rating: null,
+          updatedAt: { [Op.gte]: subHours(new Date(), 24) }
+        },
+        order: [["updatedAt", "DESC"]]
+      });
+
+      if (ratedTicket) {
+        await ratedTicket.update({ rating: ratingValue });
+        const io = getIO();
+        io.emit("ticket", { action: "update", ticket: ratedTicket });
+        try {
+          await whatsappProvider.sendMessage(
+            contextPayload.whatsappId,
+            `${contactPayload.number}@c.us`,
+            `✅ Obrigado! Sua nota *${ratingValue}⭐* foi registrada. Ficamos felizes em ajudar! 😊`
+          );
+        } catch {}
+        return;
+      }
     }
 
     const ticket = await FindOrCreateTicketService(

@@ -125,6 +125,15 @@ export const update = async (
         ticket
       });
     }
+
+    try {
+      await SendWhatsAppMessage({
+        body: "⭐ Como foi nosso atendimento?\nResponda com uma nota de *1 a 5*\n_(1 = Ruim · 5 = Excelente)_",
+        ticket
+      });
+    } catch {
+      // rating request is best-effort
+    }
   }
 
   return res.status(200).json(ticket);

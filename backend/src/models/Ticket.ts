@@ -103,6 +103,12 @@ class Ticket extends Model<Ticket> {
   @Column(DataType.INTEGER)
   botInvalidAttempts: number;
 
+  @Column(DataType.INTEGER)
+  rating: number | null;
+
+  @Column(DataType.STRING)
+  ratingComment: string | null;
+
   @HasMany(() => Message)
   messages: Message[];
 }
