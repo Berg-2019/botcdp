@@ -10,6 +10,7 @@ import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessag
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
+import AppError from "../errors/AppError";
 
 type IndexQuery = {
   pageNumber: string;
@@ -22,9 +23,26 @@ type MessageData = {
   quotedMsg?: Message;
 };
 
+const checkTicketOwnership = async (
+  ticketId: string | number,
+  user: { id: string; profile: string }
+) => {
+  const ticket = await ShowTicketService(ticketId);
+  if (
+    !["admin", "developer"].includes(user.profile)
+    && ticket.userId
+    && String(ticket.userId) !== String(user.id)
+  ) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+  return ticket;
+};
+
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { pageNumber } = req.query as IndexQuery;
+
+  await checkTicketOwnership(ticketId, req.user);
 
   const { count, messages, ticket, hasMore } = await ListMessagesService({
     pageNumber,
@@ -41,7 +59,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { body, quotedMsg }: MessageData = req.body;
   const medias = req.files as Express.Multer.File[];
 
-  const ticket = await ShowTicketService(ticketId);
+  const ticket = await checkTicketOwnership(ticketId, req.user);
 
   SetTicketMessagesAsRead(ticket);
 

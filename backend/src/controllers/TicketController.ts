@@ -9,6 +9,8 @@ import UpdateTicketService from "../services/TicketServices/UpdateTicketService"
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import formatBody from "../helpers/Mustache";
+import Ticket from "../models/Ticket";
+import AppError from "../errors/AppError";
 
 type IndexQuery = {
   searchParam: string;
@@ -26,6 +28,21 @@ interface TicketData {
   queueId: number;
   userId: number;
 }
+
+const checkTicketAccess = async (
+  ticketId: string | number,
+  user: { id: string; profile: string }
+): Promise<Ticket> => {
+  const ticket = await ShowTicketService(ticketId);
+  if (
+    !["admin", "developer"].includes(user.profile)
+    && ticket.userId
+    && String(ticket.userId) !== String(user.id)
+  ) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+  return ticket;
+};
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const {
@@ -77,9 +94,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
 
-  const contact = await ShowTicketService(ticketId);
+  const ticket = await checkTicketAccess(ticketId, req.user);
 
-  return res.status(200).json(contact);
+  return res.status(200).json(ticket);
 };
 
 export const update = async (
@@ -87,7 +104,10 @@ export const update = async (
   res: Response
 ): Promise<Response> => {
   const { ticketId } = req.params;
-  const ticketData: TicketData = req.body;
+  const { status, userId, queueId } = req.body;
+  const ticketData: TicketData = { contactId: 0, status, userId, queueId };
+
+  await checkTicketAccess(ticketId, req.user);
 
   const { ticket } = await UpdateTicketService({
     ticketData,
@@ -115,6 +135,8 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { ticketId } = req.params;
+
+  await checkTicketAccess(ticketId, req.user);
 
   const ticket = await DeleteTicketService(ticketId);
 
