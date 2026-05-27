@@ -1,10 +1,12 @@
 import type { User, Ticket, Message, QuickAnswer, Queue, Contact, DashboardStats, TicketsByQueue, AgentPerformance, VolumeByPeriod, SLAByQueue, GreetingConfig, BotFlow, SystemUser, GeneralSettings, WhatsappConnection } from '@/types';
 
-// Base URL da API. Usa valor salvo pelo usuário em "Configurar servidor"
-// (tela de login), caindo no default de desenvolvimento (porta 8081, onde
-// o docker-compose expõe o backend) quando não há valor salvo.
-const cachedApiUrl = localStorage.getItem('api_url');
-const API_URL = cachedApiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const buildUrl = import.meta.env.VITE_API_URL || '';
+const cachedApiUrl = localStorage.getItem('api_url') || '';
+const isLocalhost = (url: string) => /localhost|127\.0\.0\.1/.test(url);
+// Em produção (buildUrl aponta para domínio real), ignora cache de localhost
+const API_URL = (!isLocalhost(cachedApiUrl) && cachedApiUrl)
+  ? cachedApiUrl
+  : buildUrl || cachedApiUrl || 'http://localhost:8080';
 
 function getToken(): string | null {
   return localStorage.getItem('token');
