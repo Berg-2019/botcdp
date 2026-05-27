@@ -42,7 +42,7 @@ services:
       context: ./frontend
       dockerfile: ./Dockerfile
       args:
-        - VITE_API_URL=${BACKEND_URL:-http://localhost}:${BACKEND_PORT:-9000}
+        - VITE_API_URL=${BACKEND_URL:-http://localhost:9000}
     ports:
       - ${FRONTEND_PORT:-9001}:80
     environment:
