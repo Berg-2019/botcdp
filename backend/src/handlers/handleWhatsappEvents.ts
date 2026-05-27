@@ -272,33 +272,43 @@ export const handleMessage = async (
       return;
     }
 
-    // Captura de nota de atendimento: se o cliente responde 1-5 e há um
-    // ticket fechado nas últimas 24h sem nota, registra a avaliação e encerra.
+    // Captura de nota de atendimento: só intercepta se não há ticket ativo
+    // (aberto/pendente) para o contato — evita conflito com seleção de fila.
     const ratingValue = parseInt(processedMessage.body.trim(), 10);
     if (!isNaN(ratingValue) && ratingValue >= 1 && ratingValue <= 5) {
-      const ratedTicket = await Ticket.findOne({
+      const hasActiveTicket = await Ticket.findOne({
         where: {
           contactId: contact.id,
           whatsappId: contextPayload.whatsappId,
-          status: "closed",
-          rating: null,
-          updatedAt: { [Op.gte]: subHours(new Date(), 24) }
-        },
-        order: [["updatedAt", "DESC"]]
+          status: ["open", "pending"]
+        }
       });
 
-      if (ratedTicket) {
-        await ratedTicket.update({ rating: ratingValue });
-        const io = getIO();
-        io.emit("ticket", { action: "update", ticket: ratedTicket });
-        try {
-          await whatsappProvider.sendMessage(
-            contextPayload.whatsappId,
-            `${contactPayload.number}@c.us`,
-            `✅ Obrigado! Sua nota *${ratingValue}⭐* foi registrada. Ficamos felizes em ajudar! 😊`
-          );
-        } catch {}
-        return;
+      if (!hasActiveTicket) {
+        const ratedTicket = await Ticket.findOne({
+          where: {
+            contactId: contact.id,
+            whatsappId: contextPayload.whatsappId,
+            status: "closed",
+            rating: null,
+            updatedAt: { [Op.gte]: subHours(new Date(), 24) }
+          },
+          order: [["updatedAt", "DESC"]]
+        });
+
+        if (ratedTicket) {
+          await ratedTicket.update({ rating: ratingValue });
+          const io = getIO();
+          io.emit("ticket", { action: "update", ticket: ratedTicket });
+          try {
+            await whatsappProvider.sendMessage(
+              contextPayload.whatsappId,
+              `${contactPayload.number}@c.us`,
+              `✅ Obrigado! Sua nota *${ratingValue}⭐* foi registrada. Ficamos felizes em ajudar! 😊`
+            );
+          } catch {}
+          return;
+        }
       }
     }
 
