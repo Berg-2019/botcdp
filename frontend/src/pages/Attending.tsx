@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { TicketCard } from '@/components/TicketCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
+import { getSocket } from '@/services/socket';
 import type { Ticket } from '@/types';
 
 export default function Attending() {
@@ -10,20 +11,40 @@ export default function Attending() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const isAdmin = user?.profile === 'admin' || user?.profile === 'developer';
+
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getTickets({ status: 'open', queueIds: user?.queues?.map((q) => q.id) });
-      // Filter only tickets assigned to current user
-      setTickets((data.tickets || []).filter((t) => t.user?.id === user?.id));
+      const params: Parameters<typeof api.getTickets>[0] = { status: 'open' };
+      // Admin/developer: busca todos os abertos e filtra pelo userId no frontend
+      // Agente: filtra pelas filas atribuídas
+      if (!isAdmin && user?.queues?.length) {
+        params.queueIds = user.queues.map((q) => q.id);
+      }
+      const data = await api.getTickets(params);
+      setTickets((data.tickets || []).filter((t) => String(t.user?.id) === String(user?.id)));
     } catch {
       setTickets([]);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
+  // Carrega ao montar
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+  // Atualiza em tempo real quando qualquer ticket muda
+  useEffect(() => {
+    const socket = getSocket();
+    const handler = () => fetchTickets();
+    socket.on('ticket', handler);
+    socket.on('appMessage', handler);
+    return () => {
+      socket.off('ticket', handler);
+      socket.off('appMessage', handler);
+    };
+  }, [fetchTickets]);
 
   return (
     <div className="flex flex-col min-h-screen pb-16">
