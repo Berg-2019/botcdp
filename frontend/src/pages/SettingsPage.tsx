@@ -1,16 +1,27 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, User, Phone, Shield, Wrench, Headphones } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { LogOut, User, Phone, Shield, Wrench, Headphones, Server, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/services/api';
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [serverUrl, setServerUrl] = useState(api.getBaseUrl());
+  const [saved, setSaved] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleSaveServer = () => {
+    api.setBaseUrl(serverUrl.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   return (
@@ -57,6 +68,28 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* Server config */}
+        <div className="rounded-2xl bg-card p-4 border space-y-3">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Server className="h-4 w-4 text-muted-foreground" /> Servidor
+          </p>
+          <Input
+            type="url"
+            placeholder="https://w.casadosparafusosvta.com"
+            value={serverUrl}
+            onChange={(e) => { setServerUrl(e.target.value); setSaved(false); }}
+            className="h-10 text-sm rounded-xl"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full rounded-xl"
+            onClick={handleSaveServer}
+          >
+            {saved ? <><Check className="h-4 w-4 mr-2 text-green-500" /> Salvo</> : 'Salvar URL do servidor'}
+          </Button>
+        </div>
 
         <Button variant="outline" className="w-full rounded-xl h-12" onClick={handleLogout}>
           <LogOut className="h-4 w-4 mr-2" /> Sair
