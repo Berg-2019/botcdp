@@ -4,6 +4,7 @@ import "express-async-errors";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import * as Sentry from "@sentry/node";
 
 import "./database";
@@ -11,6 +12,7 @@ import uploadConfig from "./config/upload";
 import AppError from "./errors/AppError";
 import routes from "./routes";
 import { logger } from "./utils/logger";
+import { apiLimiter } from "./middleware/rateLimiter";
 
 Sentry.init({ dsn: process.env.SENTRY_DSN });
 
@@ -22,11 +24,12 @@ app.use(
     origin: process.env.FRONTEND_URL || 'http://localhost:3000'
   })
 );
+app.use(helmet());
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(Sentry.Handlers.requestHandler());
 app.use("/public", express.static(uploadConfig.directory));
-app.use("/api", routes);
+app.use("/api", apiLimiter, routes);
 
 app.use(Sentry.Handlers.errorHandler());
 

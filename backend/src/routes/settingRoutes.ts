@@ -1,15 +1,13 @@
 import { Router } from "express";
 import isAuth from "../middleware/isAuth";
+import isAdmin from "../middleware/isAdmin";
 
 import * as SettingController from "../controllers/SettingController";
 
 const settingRoutes = Router();
 
-settingRoutes.get("/settings", isAuth, SettingController.index);
+settingRoutes.get("/settings", isAuth, isAdmin, SettingController.index);
 
-// routes.get("/settings/:settingKey", isAuth, SettingsController.show);
-
-// change setting key to key in future
-settingRoutes.put("/settings/:settingKey", isAuth, SettingController.update);
+settingRoutes.put("/settings/:settingKey", isAuth, isAdmin, SettingController.update);
 
 export default settingRoutes;
