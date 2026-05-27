@@ -1,0 +1,18 @@
+{
+  "name": "@botcdp/botcdp",
+  "version": "1.0.0",
+  "description": "Sistema multi-agente de atendimento via WhatsApp para loja de varejo (ferramentas, peças agrícolas, mangueiras hidráulicas, materiais elétricos). O sistema recebe as mensagens, apresenta um menu interativo com 6 setores disponíveis, e direciona o cliente para a fila correspondente onde um agente assume o atendimento.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "sharp": "^0.34.5"
+  }
+}
