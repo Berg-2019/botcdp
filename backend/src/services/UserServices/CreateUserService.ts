@@ -1,4 +1,5 @@
 import * as Yup from "yup";
+import crypto from "crypto";
 
 import AppError from "../../errors/AppError";
 import { SerializeUser } from "../../helpers/SerializeUser";
@@ -42,7 +43,7 @@ const CreateUserService = async ({
   // Se foi criação pelo admin e não foi fornecida senha, gera uma temporária aleatória
   // Mais tarde, o admin compartilhará um link de reset para o usuário definir sua própria senha
   const finalPassword = isAdminCreation && !password
-    ? Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    ? crypto.randomBytes(16).toString("base64url")
     : password;
 
   // Se NÃO for criação por admin, a senha é obrigatória

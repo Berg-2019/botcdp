@@ -21,8 +21,20 @@ const SetPasswordService = async ({ token, password }: Request): Promise<{ messa
   }
 
   // Validação 2: Verifica o comprimento mínimo da senha
-  if (password.length < 5) {
-    throw new AppError("Password must be at least 5 characters long");
+  if (password.length < 8) {
+    throw new AppError("Password must be at least 8 characters long");
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    throw new AppError("Password must contain at least one uppercase letter");
+  }
+
+  if (!/[a-z]/.test(password)) {
+    throw new AppError("Password must contain at least one lowercase letter");
+  }
+
+  if (!/[0-9]/.test(password)) {
+    throw new AppError("Password must contain at least one number");
   }
 
   // Validação 3: Verifica e decodifica o token
@@ -31,16 +43,9 @@ const SetPasswordService = async ({ token, password }: Request): Promise<{ messa
     throw new AppError("Invalid or expired token");
   }
 
-  // Validação 4: Busca o usuário no banco de dados
   const user = await User.findByPk(decoded.userId);
-  if (!user) {
-    throw new AppError("User not found");
-  }
-
-  // Validação 5: Verifica se o email no token corresponde ao email do usuário
-  // Isso evita que alguém use um token de outro usuário
-  if (user.email !== decoded.email) {
-    throw new AppError("Token does not match user email");
+  if (!user || user.email !== decoded.email) {
+    throw new AppError("Invalid or expired token");
   }
 
   // Atualiza a senha do usuário
