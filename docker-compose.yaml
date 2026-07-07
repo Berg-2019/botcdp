@@ -10,8 +10,8 @@ services:
     environment:
       - DB_DIALECT=${DB_DIALECT:-mysql}
       - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASS=${MYSQL_ROOT_PASSWORD:-botcdp123}
+      - DB_USER=${MYSQL_APP_USER:-botcdp_app}
+      - DB_PASS=${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}
       - DB_NAME=${MYSQL_DATABASE:-botcdp}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
@@ -62,6 +62,8 @@ services:
     environment:
       - MYSQL_DATABASE=${MYSQL_DATABASE:-botcdp}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      - MYSQL_USER=${MYSQL_APP_USER:-botcdp_app}
+      - MYSQL_PASSWORD=${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
       - TZ=${TZ:-America/Sao_Paulo}
     restart: always
     healthcheck:
