@@ -14,7 +14,7 @@ import {
 import BotFlow from "./BotFlow";
 
 @Table
-class BotStep extends Model<BotStep> {
+class BotStep extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column

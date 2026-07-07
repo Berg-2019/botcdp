@@ -12,7 +12,7 @@ import {
 import Contact from "./Contact";
 
 @Table
-class ContactCustomField extends Model<ContactCustomField> {
+class ContactCustomField extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column

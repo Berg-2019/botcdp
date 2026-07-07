@@ -11,8 +11,8 @@ import Queue from "../../models/Queue";
 interface SerializedUser {
   id: number;
   name: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   profile: string;
   mustChangePassword: boolean;
   queues: Queue[];

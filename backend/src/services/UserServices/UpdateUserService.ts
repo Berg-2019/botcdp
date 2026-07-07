@@ -23,7 +23,7 @@ interface Request {
 interface Response {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   profile: string;
 }
 

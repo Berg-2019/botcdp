@@ -25,8 +25,8 @@ interface Request {
  * Interface que define os dados retornados após criar um usuário
  */
 interface Response {
-  email: string;        // Email do usuário
-  phone: string;         // Telefone do usuário
+  email: string | null;  // Email do usuário
+  phone: string | null;   // Telefone do usuário
   name: string;         // Nome do usuário
   id: number;           // ID do usuário no banco
   profile: string;      // Perfil do usuário

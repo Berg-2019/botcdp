@@ -22,7 +22,7 @@ import BotFlow from "./BotFlow";
 import BotStep from "./BotStep";
 
 @Table
-class Ticket extends Model<Ticket> {
+class Ticket extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column
@@ -48,8 +48,8 @@ class Ticket extends Model<Ticket> {
   updatedAt: Date;
 
   @ForeignKey(() => User)
-  @Column
-  userId: number;
+  @Column(DataType.INTEGER)
+  userId: number | null;
 
   @BelongsTo(() => User)
   user: User;
@@ -69,8 +69,8 @@ class Ticket extends Model<Ticket> {
   whatsapp: Whatsapp;
 
   @ForeignKey(() => Queue)
-  @Column
-  queueId: number;
+  @Column(DataType.INTEGER)
+  queueId: number | null;
 
   @BelongsTo(() => Queue)
   queue: Queue;

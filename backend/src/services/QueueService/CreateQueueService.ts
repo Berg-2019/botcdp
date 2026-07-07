@@ -59,7 +59,11 @@ const CreateQueueService = async (queueData: QueueData): Promise<Queue> => {
     throw new AppError(err.message);
   }
 
-  const queue = await Queue.create(queueData);
+  const queue = await Queue.create({
+    name: queueData.name,
+    color: queueData.color,
+    greetingMessage: queueData.greetingMessage
+  });
 
   return queue;
 };

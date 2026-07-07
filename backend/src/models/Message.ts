@@ -14,7 +14,7 @@ import Contact from "./Contact";
 import Ticket from "./Ticket";
 
 @Table
-class Message extends Model<Message> {
+class Message extends Model {
   @PrimaryKey
   @Column
   id: string;

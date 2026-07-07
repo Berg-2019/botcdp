@@ -22,7 +22,7 @@ import UserQueue from "./UserQueue";
 import Whatsapp from "./Whatsapp";
 
 @Table
-class User extends Model<User> {
+class User extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column
@@ -31,14 +31,14 @@ class User extends Model<User> {
   @Column
   name: string;
 
-  @Column
-  email: string;
+  @Column(DataType.STRING)
+  email: string | null;
 
   // Identificador de login (número de WhatsApp, formato 55XXXXXXXXXXX).
   // Substitui email como campo de login para contas criadas pelo fluxo
   // de convite via WhatsApp.
-  @Column
-  phone: string;
+  @Column(DataType.STRING(20))
+  phone: string | null;
 
   @Default(false)
   @Column
@@ -63,8 +63,8 @@ class User extends Model<User> {
   profile: string;
 
   @ForeignKey(() => Whatsapp)
-  @Column
-  whatsappId: number;
+  @Column(DataType.INTEGER)
+  whatsappId: number | null;
 
   @BelongsTo(() => Whatsapp)
   whatsapp: Whatsapp;

@@ -29,7 +29,7 @@ export const WHATSAPP_VALID_STATUSES = [
 export type WhatsappStatus = (typeof WHATSAPP_VALID_STATUSES)[number];
 
 @Table
-class Whatsapp extends Model<Whatsapp> {
+class Whatsapp extends Model {
   static VALID_STATUSES = WHATSAPP_VALID_STATUSES;
 
   @PrimaryKey
@@ -61,10 +61,10 @@ class Whatsapp extends Model<Whatsapp> {
   retries: number;
 
   @Column(DataType.TEXT)
-  greetingMessage: string;
+  greetingMessage: string | null;
 
   @Column(DataType.TEXT)
-  farewellMessage: string;
+  farewellMessage: string | null;
 
   @Default(false)
   @AllowNull

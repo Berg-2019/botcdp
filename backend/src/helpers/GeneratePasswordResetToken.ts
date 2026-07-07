@@ -6,17 +6,17 @@ import config from "../config/auth";
  */
 interface ResetTokenPayload {
   userId: number;      // ID do usuário
-  email: string;       // Email do usuário
+  email: string | null; // Email do usuário (null para contas criadas só com telefone)
   type: "password_reset"; // Tipo de token (sempre "password_reset")
 }
 
 /**
  * Gera um token JWT para reset de senha
  * @param userId - ID do usuário
- * @param email - Email do usuário
+ * @param email - Email do usuário (pode ser null em contas criadas só com telefone)
  * @returns Token JWT com expiração de 24 horas
  */
-export const generatePasswordResetToken = (userId: number, email: string): string => {
+export const generatePasswordResetToken = (userId: number, email: string | null): string => {
   const payload: ResetTokenPayload = {
     userId,
     email,

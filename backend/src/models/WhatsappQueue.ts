@@ -11,7 +11,7 @@ import Queue from "./Queue";
 import Whatsapp from "./Whatsapp";
 
 @Table
-class WhatsappQueue extends Model<WhatsappQueue> {
+class WhatsappQueue extends Model {
   @ForeignKey(() => Whatsapp)
   @Column
   whatsappId: number;

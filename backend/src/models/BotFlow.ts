@@ -16,7 +16,7 @@ import Queue from "./Queue";
 import BotStep from "./BotStep";
 
 @Table
-class BotFlow extends Model<BotFlow> {
+class BotFlow extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column

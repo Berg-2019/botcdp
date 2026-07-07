@@ -4,6 +4,7 @@ import {
   CreatedAt,
   UpdatedAt,
   Model,
+  DataType,
   PrimaryKey,
   AutoIncrement,
   AllowNull,
@@ -17,7 +18,7 @@ import Whatsapp from "./Whatsapp";
 import WhatsappQueue from "./WhatsappQueue";
 
 @Table
-class Queue extends Model<Queue> {
+class Queue extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column
@@ -33,8 +34,8 @@ class Queue extends Model<Queue> {
   @Column
   color: string;
 
-  @Column
-  greetingMessage: string;
+  @Column(DataType.TEXT)
+  greetingMessage: string | null;
 
   @CreatedAt
   createdAt: Date;

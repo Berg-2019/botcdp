@@ -15,7 +15,7 @@ import ContactCustomField from "./ContactCustomField";
 import Ticket from "./Ticket";
 
 @Table
-class Contact extends Model<Contact> {
+class Contact extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column

@@ -10,7 +10,7 @@ import Queue from "./Queue";
 import User from "./User";
 
 @Table
-class UserQueue extends Model<UserQueue> {
+class UserQueue extends Model {
   @ForeignKey(() => User)
   @Column
   userId: number;

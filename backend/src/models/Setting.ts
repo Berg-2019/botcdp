@@ -8,7 +8,7 @@ import {
 } from "sequelize-typescript";
 
 @Table
-class Setting extends Model<Setting> {
+class Setting extends Model {
   @PrimaryKey
   @Column
   key: string;
