@@ -100,8 +100,8 @@ export default function DeveloperPanel() {
   // Estado do dialog de criar usuário
   const [showNewUserDialog, setShowNewUserDialog] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
-  const [newUserData, setNewUserData] = useState({ name: '', email: '', profile: 'agent' });
-  const [userCreatedData, setUserCreatedData] = useState<{ resetLink: string; resetToken: string } | null>(null);
+  const [newUserData, setNewUserData] = useState<{ name: string; phone: string; email: string; profile: string; queueIds: number[] }>({ name: '', phone: '', email: '', profile: 'agent', queueIds: [] });
+  const [userCreatedData, setUserCreatedData] = useState<{ resetLink: string; resetToken: string; whatsappSent?: boolean; whatsappError?: string } | null>(null);
   const [copiedText, setCopiedText] = useState(false);
 
   // Estado do dialog de editar usuário
@@ -245,7 +245,15 @@ export default function DeveloperPanel() {
         greetingMessage: newWaGreeting || undefined,
         farewellMessage: newWaFarewell || undefined,
       });
-      setWhatsapps(prev => [...prev, wa]);
+      setWhatsapps(prev => {
+        const idx = prev.findIndex(w => w.id === wa.id);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = { ...copy[idx], ...wa };
+          return copy;
+        }
+        return [...prev, wa];
+      });
       setNewWaName('');
       setNewWaQueues([]);
       setNewWaGreeting('');
@@ -270,11 +278,20 @@ export default function DeveloperPanel() {
   };
 
   const toggleQueue = (queueId: number) => {
-    setNewWaQueues(prev => 
-      prev.includes(queueId) 
+    setNewWaQueues(prev =>
+      prev.includes(queueId)
         ? prev.filter(id => id !== queueId)
         : [...prev, queueId]
     );
+  };
+
+  const toggleUserQueue = (queueId: number) => {
+    setNewUserData(prev => ({
+      ...prev,
+      queueIds: prev.queueIds.includes(queueId)
+        ? prev.queueIds.filter(id => id !== queueId)
+        : [...prev.queueIds, queueId]
+    }));
   };
 
   const openEditWaDialog = async (wa: WhatsappConnection) => {
@@ -347,45 +364,59 @@ export default function DeveloperPanel() {
   const handleCreateUser = async () => {
     // PASSO 1: Validação básica de campos obrigatórios
     const nameTrimmed = newUserData.name.trim();
+    const phoneTrimmed = newUserData.phone.trim();
     const emailTrimmed = newUserData.email.trim();
-    
-    if (!nameTrimmed || !emailTrimmed) {
-      toast.error('Preencha o nome e email para continuar');
+
+    if (!nameTrimmed || !phoneTrimmed) {
+      toast.error('Preencha o nome e o número de WhatsApp para continuar');
       return;
     }
 
-    // PASSO 2: Validação básica de email (formato)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailTrimmed)) {
-      toast.error('Por favor, insira um email válido');
-      return;
+    if (emailTrimmed) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailTrimmed)) {
+        toast.error('Por favor, insira um email válido');
+        return;
+      }
     }
 
     try {
       setCreatingUser(true);
 
       // PASSO 3: Envia requisição para criar usuário no backend
-      // Backend retorna: user, resetToken, resetLink
+      // Backend gera senha temporária + token de reset, e tenta enviar o
+      // link de definição de senha via WhatsApp para o número informado.
       // Nota: Backend verifica se usuário logado é admin
       // Se não for, retorna 403 (Forbidden)
       const response = await api.createUser({
         name: nameTrimmed,
-        email: emailTrimmed,
+        phone: phoneTrimmed,
+        email: emailTrimmed || undefined,
         profile: newUserData.profile,
+        queueIds: newUserData.queueIds,
       });
 
       // PASSO 4: Sucesso - armazena dados para exibição na tela de sucesso
-      setUserCreatedData({ resetLink: response.resetLink, resetToken: response.resetToken });
-      
+      setUserCreatedData({
+        resetLink: response.resetLink,
+        resetToken: response.resetToken,
+        whatsappSent: response.whatsappSent,
+        whatsappError: response.whatsappError,
+      });
+
       // PASSO 5: Recarrega lista de usuários para refletir o novo usuário criado
       const usersData = await api.getUsers();
       setUsers(usersData);
 
       // PASSO 6: Mostra mensagem de sucesso
       toast.success(
-        `Usuário "${nameTrimmed}" criado com sucesso! Link de reset foi gerado.`,
+        response.whatsappSent
+          ? `Usuário "${nameTrimmed}" criado e convite enviado via WhatsApp!`
+          : `Usuário "${nameTrimmed}" criado com sucesso! Link de reset foi gerado.`,
         {
-          description: 'Você pode copiar o link ou token abaixo para compartilhar com o novo usuário.',
+          description: response.whatsappSent
+            ? 'O usuário já recebeu o link para definir a senha.'
+            : 'Não foi possível enviar via WhatsApp — copie o link abaixo para compartilhar manualmente.',
           duration: 5000,
         }
       );
@@ -433,7 +464,7 @@ export default function DeveloperPanel() {
   const handleCloseUserDialog = () => {
     setShowNewUserDialog(false);
     // Limpa formulário
-    setNewUserData({ name: '', email: '', profile: 'agent' });
+    setNewUserData({ name: '', phone: '', email: '', profile: 'agent', queueIds: [] });
     // Limpa dados de sucesso
     setUserCreatedData(null);
   };
@@ -1249,9 +1280,24 @@ export default function DeveloperPanel() {
                   />
                 </div>
 
-                {/* Campo: Email do Usuário */}
+                {/* Campo: Número de WhatsApp (login do usuário) */}
                 <div>
-                  <label className="text-sm font-medium">Email</label>
+                  <label className="text-sm font-medium">Número de WhatsApp</label>
+                  <Input
+                    type="tel"
+                    value={newUserData.phone}
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="(11) 99999-9999"
+                    className="rounded-xl mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    O bot enviará o link de definição de senha para este número.
+                  </p>
+                </div>
+
+                {/* Campo: Email do Usuário (opcional) */}
+                <div>
+                  <label className="text-sm font-medium">Email (opcional)</label>
                   <Input
                     type="email"
                     value={newUserData.email}
@@ -1275,6 +1321,31 @@ export default function DeveloperPanel() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Campo: Setores do Agente */}
+                <div>
+                  <label className="text-sm font-medium">Setores</label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Define quais filas de atendimento este usuário vai receber.
+                  </p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto rounded-xl border p-2">
+                    {queues.length === 0 && (
+                      <p className="text-xs text-muted-foreground p-2">Nenhum setor cadastrado ainda.</p>
+                    )}
+                    {queues.map((queue) => (
+                      <div key={queue.id} className="flex items-center gap-2 rounded-lg p-2 text-sm">
+                        <Checkbox
+                          id={`user-queue-${queue.id}`}
+                          checked={newUserData.queueIds.includes(queue.id)}
+                          onCheckedChange={() => toggleUserQueue(queue.id)}
+                        />
+                        <Label htmlFor={`user-queue-${queue.id}`} className="flex-1 cursor-pointer font-normal">
+                          {queue.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Botões de ação: Cancelar / Criar */}
@@ -1297,6 +1368,21 @@ export default function DeveloperPanel() {
                     Usuário criado com sucesso!
                   </p>
                 </div>
+
+                {/* Status do envio automático via WhatsApp */}
+                {userCreatedData.whatsappSent ? (
+                  <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+                    <p className="text-sm text-green-700">
+                      ✅ Convite enviado por WhatsApp para o número cadastrado.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                    <p className="text-sm text-amber-700">
+                      ⚠️ Não foi possível enviar via WhatsApp{userCreatedData.whatsappError ? `: ${userCreatedData.whatsappError}` : ''}. Compartilhe o link manualmente.
+                    </p>
+                  </div>
+                )}
 
                 {/* Campo: Link de Reset de Senha (com botão copiar) */}
                 <div>

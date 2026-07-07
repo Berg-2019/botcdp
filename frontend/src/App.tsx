@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BottomNav } from "@/components/BottomNav";
+import { ForcePasswordChange } from "@/components/ForcePasswordChange";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { useNotifications } from "@/hooks/useNotifications";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -23,6 +25,7 @@ function ProtectedRoute({ children, allowedProfiles }: { children: React.ReactNo
   const { isAuthenticated, loading, user } = useAuth();
   if (loading) return <div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.mustChangePassword) return <ForcePasswordChange />;
   if (allowedProfiles && user?.profile && !allowedProfiles.includes(user.profile)) {
     const home = user.profile === 'admin' ? '/admin' : user.profile === 'developer' ? '/developer' : '/';
     return <Navigate to={home} replace />;
@@ -63,6 +66,7 @@ function AppRoutes() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       {isAuthenticated && <BottomNav />}
+      <InstallPrompt />
     </>
   );
 }

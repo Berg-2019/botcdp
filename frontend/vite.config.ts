@@ -23,13 +23,12 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         runtimeCaching: [
           {
+            // Respostas de /api/ carregam dados de sessão (tickets, mensagens,
+            // usuários) — em dispositivo compartilhado entre agentes, cachear
+            // isso arrisca vazar dados de um usuário para a sessão seguinte.
+            // NetworkOnly: nunca serve do cache, só busca da rede.
             urlPattern: /\/api\//,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 10,
-              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
-            },
+            handler: "NetworkOnly",
           },
           {
             urlPattern: /\/socket\.io\//,

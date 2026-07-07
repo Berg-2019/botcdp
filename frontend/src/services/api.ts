@@ -8,27 +8,21 @@ const API_URL = (!isLocalhost(cachedApiUrl) && cachedApiUrl)
   ? cachedApiUrl
   : buildUrl || cachedApiUrl || 'http://localhost:8080';
 
-function getToken(): string | null {
-  return localStorage.getItem('token');
-}
-
 function headers(): HeadersInit {
-  const token = getToken();
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
 let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<User | null> | null = null;
 
 /**
- * Tenta renovar o token JWT usando o refresh token (cookie jrt).
- * Se funcionar, atualiza o token no localStorage e retorna o novo token.
- * Se falhar, retorna null.
+ * Tenta renovar a sessão usando o refresh token (cookie httpOnly `jrt`).
+ * O backend responde com Set-Cookie renovando o `access_token` httpOnly
+ * automaticamente — o frontend nunca lê ou guarda o token em si.
  */
-async function tryRefreshToken(): Promise<string | null> {
+async function tryRefreshToken(): Promise<User | null> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 
   isRefreshing = true;
@@ -42,10 +36,9 @@ async function tryRefreshToken(): Promise<string | null> {
       });
       if (!res.ok) return null;
       const data = await res.json();
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-        if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
-        return data.token as string;
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+        return data.user as User;
       }
       return null;
     } catch {
@@ -67,24 +60,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { ...headers(), ...options?.headers },
   });
 
-  // Se o token expirou (401/403), tenta renovar antes de deslogar
+  // Se o access_token expirou (401/403), tenta renovar a sessão antes de deslogar
   if (res.status === 401 || res.status === 403) {
-    const newToken = await tryRefreshToken();
-    if (newToken) {
-      // Refaz a requisição com o token atualizado
+    const refreshedUser = await tryRefreshToken();
+    if (refreshedUser) {
+      // Refaz a requisição original; o novo cookie já foi setado pelo browser
       const retryRes = await fetch(`${baseUrl}${path}`, {
         ...options,
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${newToken}`,
-          ...options?.headers,
-        },
+        headers: { ...headers(), ...options?.headers },
       });
       if (retryRes.ok) return retryRes.json();
     }
     // Se o refresh também falhou, desloga
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
     throw new Error('Unauthorized or Forbidden');
@@ -103,19 +91,32 @@ export const api = {
     return API_URL;
   },
 
-  async login(phone: string, password: string): Promise<User> {
-    const data = await request<{ token: string; user: User }>('/api/auth/login', {
+  // Aceita tanto número de WhatsApp (login padrão atual) quanto email
+  // (contas legadas que ainda não migraram para phone).
+  async login(identifier: string, password: string): Promise<User> {
+    const isEmail = identifier.includes('@');
+    const data = await request<{ user: User }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: phone, password }),
+      body: JSON.stringify(
+        isEmail ? { email: identifier, password } : { phone: identifier, password }
+      ),
     });
-    localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    return { ...data.user, token: data.token };
+    return data.user;
   },
 
-  logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  async logout() {
+    try {
+      await request('/api/auth/logout', { method: 'DELETE' });
+    } finally {
+      localStorage.removeItem('user');
+    }
+  },
+
+  // Revalida a sessão a partir do cookie httpOnly `jrt` (chamado no boot do app,
+  // já que o frontend não tem como ler o access_token diretamente).
+  async checkSession(): Promise<User | null> {
+    return tryRefreshToken();
   },
 
   getUser(): User | null {
@@ -151,7 +152,6 @@ export const api = {
 
   async sendMedia(ticketId: number, file: File | Blob, caption = ''): Promise<Message> {
     const baseUrl = API_URL;
-    const token = getToken();
     const formData = new FormData();
     const fileName = file instanceof File ? file.name : `audio_${Date.now()}.webm`;
     formData.append('medias', file, fileName);
@@ -159,7 +159,7 @@ export const api = {
     formData.append('fromMe', 'true');
     const res = await fetch(`${baseUrl}/api/messages/${ticketId}`, {
       method: 'POST',
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      credentials: 'include',
       body: formData,
     });
     if (!res.ok) throw new Error(await res.text());
@@ -257,9 +257,10 @@ export const api = {
   },
 
   // Cria um novo usuário no sistema (apenas admin)
-  // Backend gera automaticamente uma senha temporária e um token de reset
-  // Retorna: user, resetToken (JWT), resetLink (URL completa para compartilhar)
-  async createUser(data: { name: string; email: string; profile: string }): Promise<{ user: SystemUser; resetToken: string; resetLink: string }> {
+  // Backend gera automaticamente uma senha temporária e um token de reset,
+  // e tenta enviar o link de definição de senha via WhatsApp para `phone`.
+  // Retorna: user, resetToken (JWT), resetLink, whatsappSent/whatsappError
+  async createUser(data: { name: string; phone: string; email?: string; profile: string; queueIds?: number[] }): Promise<{ user: SystemUser; resetToken: string; resetLink: string; whatsappSent?: boolean; whatsappError?: string }> {
     return request('/api/users', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -272,6 +273,16 @@ export const api = {
   async setPassword(data: { token: string; password: string }): Promise<{ message: string }> {
     return request('/api/auth/set-password', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Troca de senha de um usuário já autenticado (usado no gate de
+  // mustChangePassword). O backend encerra a sessão atual após a troca,
+  // por isso o chamador deve redirecionar para /login em seguida.
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<{ message: string }> {
+    return request('/api/auth/change-password', {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },

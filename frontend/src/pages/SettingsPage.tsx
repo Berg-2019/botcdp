@@ -76,7 +76,7 @@ export default function SettingsPage() {
           </p>
           <Input
             type="url"
-            placeholder="https://w.casadosparafusosvta.com"
+            placeholder="https://agentes.casadosparafusosvta.com"
             value={serverUrl}
             onChange={(e) => { setServerUrl(e.target.value); setSaved(false); }}
             className="h-10 text-sm rounded-xl"
