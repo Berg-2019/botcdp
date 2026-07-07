@@ -5,16 +5,16 @@ let socket: Socket | null = null;
 
 /**
  * Retorna (ou cria) a instância singleton do Socket.IO.
- * O token é enviado via `query` pois o backend valida
- * `socket.handshake.query.token` na conexão.
+ * A autenticação é feita pelo cookie httpOnly `access_token`, enviado
+ * automaticamente no handshake via `withCredentials` — nunca por query
+ * string (evita vazar o token em logs/histórico).
  */
 export function getSocket(): Socket {
   if (!socket) {
     const url = api.getBaseUrl();
-    const token = localStorage.getItem('token') || '';
     socket = io(url, {
       transports: ['websocket', 'polling'],
-      query: { token },
+      withCredentials: true,
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 3000,
@@ -24,14 +24,8 @@ export function getSocket(): Socket {
   return socket;
 }
 
-/**
- * Conecta o socket (atualizando o token antes, caso tenha mudado).
- */
 export function connectSocket() {
   const s = getSocket();
-  // Atualiza o token no query a cada reconexão
-  const token = localStorage.getItem('token') || '';
-  (s.io.opts.query as Record<string, string>).token = token;
   if (!s.connected) s.connect();
   return s;
 }

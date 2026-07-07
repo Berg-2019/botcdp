@@ -13,15 +13,33 @@ interface TokenPayload {
 
 let io: SocketIO;
 
+// Extrai um valor de cookie do header bruto "Cookie" recebido no handshake
+// do socket.io (não passa pelo cookie-parser do Express nesse ponto).
+const getCookieValue = (
+  cookieHeader: string | undefined,
+  name: string
+): string | undefined => {
+  if (!cookieHeader) return undefined;
+  const match = cookieHeader
+    .split(";")
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : undefined;
+};
+
 export const initIO = (httpServer: Server): SocketIO => {
   io = new SocketIO(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL as string
+      origin: process.env.FRONTEND_URL as string,
+      credentials: true
     }
   });
 
   io.on("connection", socket => {
-    const { token } = socket.handshake.query;
+    const token = getCookieValue(
+      socket.handshake.headers.cookie,
+      "access_token"
+    );
     let tokenData: TokenPayload | null = null;
     try {
       tokenData = verify(token as string, authConfig.secret as string) as TokenPayload;

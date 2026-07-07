@@ -9,6 +9,7 @@ import { getIO } from "../libs/socket";
 import { logger } from "../utils/logger";
 import { debounce } from "../helpers/Debounce";
 import formatBody from "../helpers/Mustache";
+import withRetry from "../helpers/WithRetry";
 
 import Contact from "../models/Contact";
 import Ticket from "../models/Ticket";
@@ -156,6 +157,16 @@ const handleQueueLogic = async (
   const { queues, greetingMessage } = await ShowWhatsAppService(whatsappId);
 
   if (queues.length === 1) {
+    // Atribuição atômica: só segue se esta chamada foi quem realmente
+    // zerou queueId -> queues[0].id. Evita que duas mensagens quase
+    // simultâneas do mesmo contato disparem a saudação em duplicidade
+    // ou sobrescrevam a fila uma da outra.
+    const [claimed] = await Ticket.update(
+      { queueId: queues[0].id },
+      { where: { id: ticket.id, queueId: null } }
+    );
+    if (claimed === 0) return;
+
     await UpdateTicketService({
       ticketData: { queueId: queues[0].id },
       ticketId: ticket.id
@@ -184,6 +195,13 @@ const handleQueueLogic = async (
   const choosenQueue = queues[+selectedOption - 1];
 
   if (choosenQueue) {
+    // Mesma trava atômica do ramo de fila única, ver comentário acima.
+    const [claimed] = await Ticket.update(
+      { queueId: choosenQueue.id },
+      { where: { id: ticket.id, queueId: null } }
+    );
+    if (claimed === 0) return;
+
     await UpdateTicketService({
       ticketData: { queueId: choosenQueue.id },
       ticketId: ticket.id
@@ -297,7 +315,16 @@ export const handleMessage = async (
         });
 
         if (ratedTicket) {
-          await ratedTicket.update({ rating: ratingValue });
+          // Trava atômica: garante que só a primeira mensagem de nota a
+          // chegar grava o rating, mesmo se duas notas próximas forem
+          // processadas em paralelo para o mesmo ticket fechado.
+          const [claimed] = await Ticket.update(
+            { rating: ratingValue },
+            { where: { id: ratedTicket.id, rating: null } }
+          );
+          if (claimed === 0) return;
+          await ratedTicket.reload();
+
           const io = getIO();
           io.emit("ticket", { action: "update", ticket: ratedTicket });
           try {
@@ -312,11 +339,18 @@ export const handleMessage = async (
       }
     }
 
-    const ticket = await FindOrCreateTicketService(
-      contact,
-      contextPayload.whatsappId,
-      contextPayload.unreadMessages,
-      groupContact
+    // Falhas transitórias de banco (deadlock, pool esgotado) não devem
+    // descartar a mensagem do cliente silenciosamente — tenta de novo
+    // antes de desistir.
+    const ticket = await withRetry(
+      () =>
+        FindOrCreateTicketService(
+          contact,
+          contextPayload.whatsappId,
+          contextPayload.unreadMessages,
+          groupContact
+        ),
+      { label: "FindOrCreateTicketService" }
     );
 
     const messageData: any = {
@@ -350,7 +384,9 @@ export const handleMessage = async (
 
     await ticket.update({ lastMessage: lastMessageText });
 
-    await CreateMessageService({ messageData });
+    await withRetry(() => CreateMessageService({ messageData }), {
+      label: "CreateMessageService"
+    });
 
     await processVcardMessage(processedMessage);
 
@@ -398,9 +434,12 @@ export const handleMessage = async (
       }
     }
   } catch (err) {
+    // Chegou até aqui mesmo após as tentativas do withRetry: a mensagem
+    // do cliente foi efetivamente perdida (não há fila de reprocessamento).
+    // Sentry.captureException é o canal de alerta operacional para isso.
     Sentry.captureException(err);
     logger.error({
-      info: "Erro ao lidar com a mensagem recebida",
+      info: "Mensagem do cliente descartada após falha (sem reprocessamento)",
       err,
       messagePayload,
       contactPayload,

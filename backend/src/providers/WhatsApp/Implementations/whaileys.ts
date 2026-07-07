@@ -37,8 +37,9 @@ import Whatsapp from "../../../models/Whatsapp";
 import { getIO } from "../../../libs/socket";
 import { logger } from "../../../utils/logger";
 import AppError from "../../../errors/AppError";
-// Simple in-memory key store keyed by sessionId. Persistence of `creds`
-// still happens through Whatsapp.session (see saveCreds path below).
+// Fallback em memória, usado apenas se o Redis estiver indisponível — nesse
+// caso as chaves Signal não sobrevivem a um restart do processo (mesma
+// limitação que motivou a migração para Redis abaixo).
 const sessionKeyStore = new Map<number, Record<string, Record<string, any>>>();
 
 const getStoreFor = (sessionId: number) => {
@@ -49,6 +50,13 @@ const getStoreFor = (sessionId: number) => {
   }
   return store;
 };
+
+// Chaves Signal (pre-keys, sessões, sender keys etc.) do Baileys, persistidas
+// no Redis com o mesmo prefixo que `clearSessionKeys` já limpa no logout —
+// sem isso, cada restart do backend derruba a conexão do WhatsApp e exige
+// escanear o QR Code de novo, mesmo com `creds` salvo no banco.
+const signalKeyRedisKey = (sessionId: number, category: string, id: string) =>
+  `wpp:${sessionId}:${category}:${id}`;
 import { getRedisClient } from "../../../libs/redisStore";
 import {
   SendMessageOptions,
@@ -303,27 +311,76 @@ const useSessionAuthState = async (whatsapp: Whatsapp) => {
       creds: creds as AuthenticationCreds,
       keys: {
         get: async (type: string, ids: string[]) => {
-          const store = getStoreFor(sessionId);
-          const bucket = store[type] || {};
           const result: Record<string, any> = {};
-          ids.forEach(id => {
-            if (bucket[id] !== undefined) result[id] = bucket[id];
+          const client = getRedisClient();
+
+          if (!client) {
+            const store = getStoreFor(sessionId);
+            const bucket = store[type] || {};
+            ids.forEach(id => {
+              if (bucket[id] !== undefined) result[id] = bucket[id];
+            });
+            return result;
+          }
+
+          if (ids.length === 0) return result;
+
+          const values = await client.mget(
+            ids.map(id => signalKeyRedisKey(sessionId, type, id))
+          );
+
+          values.forEach((value, index) => {
+            if (!value) return;
+            try {
+              result[ids[index]] = JSON.parse(value, BufferJSON.reviver);
+            } catch (err) {
+              logger.error({
+                info: "Error parsing signal key from Redis",
+                sessionId,
+                type,
+                err
+              });
+            }
           });
+
           return result;
         },
         set: async (data: SignalDataSet) => {
-          const store = getStoreFor(sessionId);
+          const client = getRedisClient();
+
+          if (!client) {
+            const store = getStoreFor(sessionId);
+            Object.entries(data).forEach(([category, categoryData]) => {
+              if (!categoryData) return;
+              if (!store[category]) store[category] = {};
+              Object.entries(categoryData).forEach(([id, value]) => {
+                if (value === null) {
+                  delete store[category][id];
+                } else {
+                  store[category][id] = value;
+                }
+              });
+            });
+            return;
+          }
+
+          const pipeline = client.pipeline();
+          let hasOps = false;
+
           Object.entries(data).forEach(([category, categoryData]) => {
             if (!categoryData) return;
-            if (!store[category]) store[category] = {};
             Object.entries(categoryData).forEach(([id, value]) => {
-              if (value === null) {
-                delete store[category][id];
+              const redisKey = signalKeyRedisKey(sessionId, category, id);
+              hasOps = true;
+              if (value === null || value === undefined) {
+                pipeline.del(redisKey);
               } else {
-                store[category][id] = value;
+                pipeline.set(redisKey, JSON.stringify(value, BufferJSON.replacer));
               }
             });
           });
+
+          if (hasOps) await pipeline.exec();
         }
       }
     }
@@ -1088,7 +1145,13 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       if (shouldReconnect) {
         await flushPendingCredsSave(sessionId);
 
-        await whatsapp.update({ status: "OPENING" });
+        // Backoff exponencial (3s, 6s, 12s, ... até 60s) em vez de retry
+        // fixo — evita livelock martelando reconexão quando a falha é
+        // persistente (ex.: número temporariamente banido).
+        const nextRetry = (whatsapp.retries || 0) + 1;
+        const backoffMs = Math.min(3000 * 2 ** (nextRetry - 1), 60000);
+
+        await whatsapp.update({ status: "OPENING", retries: nextRetry });
         io.emit("whatsappSession", {
           action: "update",
           session: whatsapp
@@ -1096,10 +1159,12 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         logger.info({
           info: "Connection closed, reconnecting...",
           sessionId,
-          statusCode
+          statusCode,
+          attempt: nextRetry,
+          backoffMs
         });
 
-        await sleep(3000);
+        await sleep(backoffMs);
         init(whatsapp);
       }
     }
