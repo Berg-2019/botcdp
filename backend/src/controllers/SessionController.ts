@@ -3,22 +3,25 @@ import AppError from "../errors/AppError";
 
 import AuthUserService from "../services/UserServices/AuthUserService";
 import { SendRefreshToken } from "../helpers/SendRefreshToken";
+import { SendAccessToken, clearAccessToken } from "../helpers/SendAccessToken";
 import { RefreshTokenService } from "../services/AuthServices/RefreshTokenService";
 import SetPasswordService from "../services/AuthServices/SetPasswordService";
+import ChangePasswordService from "../services/AuthServices/ChangePasswordService";
 import User from "../models/User";
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { email, password } = req.body;
+  const { email, phone, password } = req.body;
 
   const { token, serializedUser, refreshToken } = await AuthUserService({
     email,
+    phone,
     password
   });
 
   SendRefreshToken(res, refreshToken);
+  SendAccessToken(res, token);
 
   return res.status(200).json({
-    token,
     user: serializedUser
   });
 };
@@ -39,8 +42,9 @@ export const update = async (
   );
 
   SendRefreshToken(res, refreshToken);
+  SendAccessToken(res, newToken);
 
-  return res.json({ token: newToken, user });
+  return res.json({ user });
 };
 
 export const remove = async (
@@ -55,6 +59,7 @@ export const remove = async (
   }
 
   res.clearCookie("jrt");
+  clearAccessToken(res);
 
   return res.send();
 };
@@ -66,6 +71,24 @@ export const setPassword = async (
   const { token, password } = req.body;
 
   const result = await SetPasswordService({ token, password });
+
+  return res.status(200).json(result);
+};
+
+export const changePassword = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { currentPassword, newPassword } = req.body;
+
+  const result = await ChangePasswordService({
+    userId: req.user.id,
+    currentPassword,
+    newPassword
+  });
+
+  res.clearCookie("jrt");
+  clearAccessToken(res);
 
   return res.status(200).json(result);
 };

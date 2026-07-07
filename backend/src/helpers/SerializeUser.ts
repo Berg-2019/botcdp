@@ -6,7 +6,9 @@ interface SerializedUser {
   id: number;
   name: string;
   email: string;
+  phone: string;
   profile: string;
+  mustChangePassword: boolean;
   queues: Queue[];
   whatsapp: Whatsapp;
 }
@@ -16,7 +18,9 @@ export const SerializeUser = (user: User): SerializedUser => {
     id: user.id,
     name: user.name,
     email: user.email,
+    phone: user.phone,
     profile: user.profile,
+    mustChangePassword: user.mustChangePassword,
     queues: user.queues,
     whatsapp: user.whatsapp
   };

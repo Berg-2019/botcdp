@@ -34,6 +34,16 @@ class User extends Model<User> {
   @Column
   email: string;
 
+  // Identificador de login (número de WhatsApp, formato 55XXXXXXXXXXX).
+  // Substitui email como campo de login para contas criadas pelo fluxo
+  // de convite via WhatsApp.
+  @Column
+  phone: string;
+
+  @Default(false)
+  @Column
+  mustChangePassword: boolean;
+
   @Column(DataType.VIRTUAL)
   password: string;
 

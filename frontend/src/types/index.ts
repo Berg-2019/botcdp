@@ -6,7 +6,7 @@ export interface User {
   email: string;
   phone: string;
   queues: Queue[];
-  token: string;
+  mustChangePassword?: boolean;
   profile?: UserProfile;
 }
 
@@ -131,9 +131,11 @@ export interface SystemUser {
   id: number;
   name: string;
   email: string;
+  phone?: string;
   profile: UserProfile;
   queues: Queue[];
   enabled: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface GeneralSettings {

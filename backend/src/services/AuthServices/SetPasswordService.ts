@@ -51,6 +51,7 @@ const SetPasswordService = async ({ token, password }: Request): Promise<{ messa
   // Atualiza a senha do usuário
   // O hook @BeforeUpdate do modelo User automaticamente faz hash da senha
   user.password = password;
+  user.mustChangePassword = false;
   await user.save();
 
   return { message: "Password updated successfully" };

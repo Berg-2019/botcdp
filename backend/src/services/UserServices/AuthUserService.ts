@@ -5,18 +5,22 @@ import {
   createRefreshToken
 } from "../../helpers/CreateTokens";
 import { SerializeUser } from "../../helpers/SerializeUser";
+import normalizePhone from "../../helpers/NormalizePhone";
 import Queue from "../../models/Queue";
 
 interface SerializedUser {
   id: number;
   name: string;
   email: string;
+  phone: string;
   profile: string;
+  mustChangePassword: boolean;
   queues: Queue[];
 }
 
 interface Request {
-  email: string;
+  email?: string;
+  phone?: string;
   password: string;
 }
 
@@ -31,10 +35,17 @@ const LOCKOUT_MINUTES = 15;
 
 const AuthUserService = async ({
   email,
+  phone,
   password
 }: Request): Promise<Response> => {
+  if (!email && !phone) {
+    throw new AppError("ERR_INVALID_CREDENTIALS", 401);
+  }
+
+  // Login por número de WhatsApp é o método atual; email é mantido para
+  // contas legadas que ainda não migraram para `phone`.
   const user = await User.findOne({
-    where: { email },
+    where: phone ? { phone: normalizePhone(phone) } : { email: email! },
     include: ["queues"]
   });
 

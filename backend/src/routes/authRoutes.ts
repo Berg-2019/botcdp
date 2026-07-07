@@ -17,4 +17,11 @@ authRoutes.delete("/logout", isAuth, SessionController.remove);
 
 authRoutes.post("/set-password", loginLimiter, SessionController.setPassword);
 
+authRoutes.put(
+  "/change-password",
+  isAuth,
+  authLimiter,
+  SessionController.changePassword
+);
+
 export default authRoutes;

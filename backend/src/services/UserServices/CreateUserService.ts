@@ -4,13 +4,15 @@ import crypto from "crypto";
 import AppError from "../../errors/AppError";
 import { SerializeUser } from "../../helpers/SerializeUser";
 import { generatePasswordResetToken } from "../../helpers/GeneratePasswordResetToken";
+import normalizePhone from "../../helpers/NormalizePhone";
 import User from "../../models/User";
 
 /**
  * Interface que define os dados necessários para criar um novo usuário
  */
 interface Request {
-  email: string;              // Email do usuário (obrigatório e único)
+  email?: string;              // Email do usuário (legado; opcional se phone for fornecido)
+  phone?: string;              // Número de WhatsApp do usuário (identificador de login atual)
   password?: string;          // Senha (opcional se for criação por admin)
   name: string;               // Nome do usuário (obrigatório)
   queueIds?: number[];        // IDs das filas/setores atribuídos ao usuário
@@ -24,6 +26,7 @@ interface Request {
  */
 interface Response {
   email: string;        // Email do usuário
+  phone: string;         // Telefone do usuário
   name: string;         // Nome do usuário
   id: number;           // ID do usuário no banco
   profile: string;      // Perfil do usuário
@@ -32,6 +35,7 @@ interface Response {
 
 const CreateUserService = async ({
   email,
+  phone,
   password,
   name,
   queueIds = [],
@@ -39,9 +43,16 @@ const CreateUserService = async ({
   whatsappId,
   isAdminCreation = false
 }: Request): Promise<Response> => {
+  if (!email && !phone) {
+    throw new AppError("Either email or phone is required");
+  }
+
+  const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+
   // PASSO 1: Definir a senha
   // Se foi criação pelo admin e não foi fornecida senha, gera uma temporária aleatória
-  // Mais tarde, o admin compartilhará um link de reset para o usuário definir sua própria senha
+  // que o usuário nunca vê — ele define a própria senha pelo link de convite
+  // (compartilhado por WhatsApp quando phone é informado, ou manualmente pelo admin).
   const finalPassword = isAdminCreation && !password
     ? crypto.randomBytes(16).toString("base64url")
     : password;
@@ -52,27 +63,32 @@ const CreateUserService = async ({
   }
 
   // PASSO 2: Validar dados usando Yup
-  // Validações: nome (min 2 chars), email (formato válido e único)
   const schema = Yup.object().shape({
     name: Yup.string().required().min(2),
     email: Yup.string()
       .email()
-      .required()
       .test(
         "Check-email",
         "An user with this email already exists.",
         async value => {
-          if (!value) return false;
-          const emailExists = await User.findOne({
-            where: { email: value }
-          });
-          return !emailExists;  // Retorna true se email NÃO existe (validação passa)
+          if (!value) return true;
+          const emailExists = await User.findOne({ where: { email: value } });
+          return !emailExists;
         }
       ),
+    phone: Yup.string().test(
+      "Check-phone",
+      "An user with this phone already exists.",
+      async value => {
+        if (!value) return true;
+        const phoneExists = await User.findOne({ where: { phone: value } });
+        return !phoneExists;
+      }
+    )
   });
 
   try {
-    await schema.validate({ email, name });
+    await schema.validate({ email, name, phone: normalizedPhone });
   } catch (err) {
     throw new AppError(err.message);
   }
@@ -82,10 +98,12 @@ const CreateUserService = async ({
   const user = await User.create(
     {
       email,
+      phone: normalizedPhone,
       password: finalPassword!,  // finalPassword é garantido não ser null aqui
       name,
       profile,
-      whatsappId: whatsappId ? whatsappId : null
+      whatsappId: whatsappId ? whatsappId : null,
+      mustChangePassword: isAdminCreation
     },
     { include: ["queues", "whatsapp"] }
   );
@@ -101,7 +119,8 @@ const CreateUserService = async ({
   let resetToken: string | undefined;
 
   // PASSO 6: Se foi criação por admin, gerar token de reset de senha
-  // Este token será incluído no link que o admin compartilhará com o novo usuário
+  // Este token será incluído no link enviado por WhatsApp (ou compartilhado
+  // manualmente pelo admin) para o usuário definir sua própria senha.
   if (isAdminCreation) {
     resetToken = generatePasswordResetToken(user.id, user.email);
   }

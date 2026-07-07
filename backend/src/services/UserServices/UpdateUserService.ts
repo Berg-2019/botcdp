@@ -2,10 +2,12 @@ import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
 import { SerializeUser } from "../../helpers/SerializeUser";
+import normalizePhone from "../../helpers/NormalizePhone";
 import ShowUserService from "./ShowUserService";
 
 interface UserData {
   email?: string;
+  phone?: string;
   password?: string;
   name?: string;
   profile?: string;
@@ -40,6 +42,7 @@ const UpdateUserService = async ({
 
   const {
     email,
+    phone,
     password,
     profile,
     name,
@@ -55,6 +58,7 @@ const UpdateUserService = async ({
 
   const updateData: Record<string, any> = {};
   if (email !== undefined) updateData.email = email;
+  if (phone !== undefined) updateData.phone = phone ? normalizePhone(phone) : null;
   if (name !== undefined) updateData.name = name;
   if (profile !== undefined) updateData.profile = profile;
   if (whatsappId !== undefined) updateData.whatsappId = whatsappId ? whatsappId : null;

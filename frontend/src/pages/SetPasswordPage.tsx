@@ -40,8 +40,13 @@ export default function SetPasswordPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('A senha deve ter no mínimo 6 caracteres');
+    if (
+      password.length < 8 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
+      setError('A senha deve ter no mínimo 8 caracteres, com letra maiúscula, minúscula e número');
       return;
     }
 
@@ -124,7 +129,7 @@ export default function SetPasswordPage() {
         </form>
 
         <p className="text-xs text-muted-foreground text-center mt-4">
-          Mínimo 6 caracteres. Use uma mistura de letras, números e símbolos para maior segurança.
+          Mínimo 8 caracteres, com letra maiúscula, minúscula e número.
         </p>
       </div>
     </div>
