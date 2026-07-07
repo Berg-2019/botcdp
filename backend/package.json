@@ -18,7 +18,8 @@
   "author": "",
   "license": "MIT",
   "overrides": {
-    "protobufjs": "7.6.5"
+    "protobufjs": "7.6.5",
+    "axios": "1.18.1"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
