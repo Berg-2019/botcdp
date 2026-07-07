@@ -1,8 +1,10 @@
 import { QueryInterface } from "sequelize";
 import { hash } from "bcryptjs";
+import { randomBytes } from "crypto";
 
-// Senha padrão dos 6 agentes setoriais: "cdp123" (trocar em produção).
-// Hash gerado com bcryptjs (rounds=8) para alinhar com o hash do admin.
+// Senha compartilhada dos 6 agentes setoriais, gerada aleatoriamente a cada
+// seed — impressa uma única vez no log deste comando. Login força troca de
+// senha (mustChangePassword) no primeiro acesso de cada agente.
 
 const sectors = [
   {
@@ -58,7 +60,11 @@ const sectors = [
 module.exports = {
   up: async (queryInterface: QueryInterface) => {
     const now = new Date();
-    const passwordHash = await hash("cdp123", 8);
+    const password = `${randomBytes(9).toString("base64url").replace(/[-_]/g, "")}Aa1`;
+    const passwordHash = await hash(password, 8);
+
+    // eslint-disable-next-line no-console
+    console.log(`\n[seed] Senha gerada para os 6 agentes setoriais: ${password}\n`);
 
     await queryInterface.bulkInsert(
       "Queues",
@@ -79,6 +85,7 @@ module.exports = {
         email: s.user.email,
         passwordHash,
         profile: "user",
+        mustChangePassword: true,
         tokenVersion: 0,
         createdAt: now,
         updatedAt: now
