@@ -42,7 +42,9 @@ export const initIO = (httpServer: Server): SocketIO => {
     );
     let tokenData: TokenPayload | null = null;
     try {
-      tokenData = verify(token as string, authConfig.secret as string) as TokenPayload;
+      tokenData = verify(token as string, authConfig.secret as string, {
+        algorithms: ["HS256"]
+      }) as TokenPayload;
     } catch (error) {
       socket.disconnect();
       return io;

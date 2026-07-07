@@ -35,7 +35,9 @@ const isAuth = (req: Request, res: Response, next: NextFunction): void => {
 
   let decoded: TokenPayload;
   try {
-    decoded = verify(token, authConfig.secret as string) as TokenPayload;
+    decoded = verify(token, authConfig.secret as string, {
+      algorithms: ["HS256"]
+    }) as TokenPayload;
   } catch (err) {
     throw new AppError(
       "ERR_SESSION_EXPIRED",

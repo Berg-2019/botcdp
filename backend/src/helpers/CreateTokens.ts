@@ -14,7 +14,8 @@ export const createAccessToken = (user: User): string => {
     },
     secret as string,
     {
-      expiresIn
+      expiresIn,
+      algorithm: "HS256"
     }
   );
 };
@@ -23,6 +24,7 @@ export const createRefreshToken = (user: User): string => {
   const { refreshSecret, refreshExpiresIn } = authConfig;
 
   return sign({ id: user.id, tokenVersion: user.tokenVersion }, refreshSecret as string, {
-    expiresIn: refreshExpiresIn
+    expiresIn: refreshExpiresIn,
+    algorithm: "HS256"
   });
 };
