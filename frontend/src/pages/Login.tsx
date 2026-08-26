@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -25,8 +26,17 @@ export default function Login() {
       const profile = user?.profile || 'agent';
       const route = profile === 'admin' ? '/admin' : profile === 'developer' ? '/developer' : '/';
       navigate(route, { replace: true });
-    } catch {
-      setError('Login falhou. Verifique suas credenciais.');
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      if (status === 423) {
+        // Conta temporariamente bloqueada por excesso de tentativas — a
+        // mensagem do backend já inclui os minutos restantes.
+        setError((err as Error).message);
+      } else if (status === 429) {
+        setError('Muitas tentativas de login. Aguarde alguns minutos e tente novamente.');
+      } else {
+        setError('Login falhou. Verifique suas credenciais.');
+      }
     } finally {
       setLoading(false);
     }
@@ -50,7 +60,23 @@ export default function Login() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Senha</label>
-            <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 rounded-xl" />
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-12 rounded-xl pr-11"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
           {error && <p className="text-sm text-destructive text-center">{error}</p>}
           <Button type="submit" className="w-full h-12 rounded-xl text-base font-semibold" disabled={loading}>

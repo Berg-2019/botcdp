@@ -11,6 +11,8 @@ import makeWASocket, {
   isLidUser,
   isJidGroup,
   isJidBroadcast,
+  isJidStatusBroadcast,
+  isJidNewsletter,
   makeCacheableSignalKeyStore,
   BufferJSON,
   WAMessage,
@@ -187,37 +189,105 @@ const msgCache = {
   }
 };
 
-const clearSessionKeys = async (sessionId: number): Promise<void> => {
+// Escaneia e apaga do Redis todas as chaves que batem com `match`, seguindo
+// o cursor do SCAN até esgotar. Reaproveitado por clearSessionKeys (limpa
+// tudo, no logout) e clearSignalSessions (limpa só sessões Signal
+// corrompidas, na recuperação de erros "Bad MAC").
+const scanAndDeleteMatch = async (match: string): Promise<void> => {
   const client = getRedisClient();
   if (!client) return;
 
+  const scanAndDelete = async (cursor: string): Promise<void> => {
+    const [nextCursor, keys] = await client.scan(
+      cursor,
+      "MATCH",
+      match,
+      "COUNT",
+      100
+    );
+
+    if (keys.length > 0) {
+      await client.del(keys);
+    }
+
+    if (nextCursor !== "0") {
+      await scanAndDelete(nextCursor);
+    }
+  };
+
+  await scanAndDelete("0");
+};
+
+const clearSessionKeys = async (sessionId: number): Promise<void> => {
   try {
-    const match = `wpp:${sessionId}:*`;
-
-    const scanAndDelete = async (cursor: string): Promise<void> => {
-      const [nextCursor, keys] = await client.scan(
-        cursor,
-        "MATCH",
-        match,
-        "COUNT",
-        100
-      );
-
-      if (keys.length > 0) {
-        await client.del(keys);
-      }
-
-      if (nextCursor !== "0") {
-        await scanAndDelete(nextCursor);
-      }
-    };
-
-    await scanAndDelete("0");
-
+    await scanAndDeleteMatch(`wpp:${sessionId}:*`);
     logger.info({ info: "Cleared Redis session keys", sessionId });
   } catch (err) {
     logger.error({ info: "Error clearing Redis session keys", sessionId, err });
   }
+};
+
+// Limpa apenas as sessões Signal (categoria "session") de uma sessão do
+// WhatsApp, preservando pre-keys, sender-keys, app-state-sync-keys e as
+// `creds` (essas ficam na coluna Whatsapp.session do banco, não no Redis).
+// Usado na recuperação de erros "Bad MAC" — descarta só o par de sessão
+// Signal corrompido, sem exigir um novo QR Code.
+const clearSignalSessions = async (sessionId: number): Promise<void> => {
+  try {
+    await scanAndDeleteMatch(`wpp:${sessionId}:session:*`);
+    logger.info({ info: "Cleared corrupted Signal sessions", sessionId });
+  } catch (err) {
+    logger.error({
+      info: "Error clearing corrupted Signal sessions",
+      sessionId,
+      err
+    });
+  }
+};
+
+// Recuperação de sessão corrompida ("Bad MAC"): quando o Baileys não
+// consegue decriptar uma mensagem por chaves de sessão Signal
+// desalinhadas, ele emite uma mensagem-stub (messageStubType CIPHERTEXT)
+// em vez de lançar. Erros isolados são normais (perda ocasional de
+// pacote); vários em pouco tempo indicam sessão corrompida, cuja única
+// saída é descartar as chaves Signal e reconectar (padrão usado pelo
+// Takeshi Bot). O contador é em memória, por processo — reseta a cada
+// restart do backend, o que é aceitável já que o Redis mantém o estado
+// entre restarts.
+const BAD_MAC_MAX_ERRORS = 5;
+const BAD_MAC_WINDOW_MS = 300_000;
+const badMacTimestamps = new Map<number, number[]>();
+const badMacRecovering = new Set<number>();
+
+const handleBadMacError = (sessionId: number, wbot: Session): void => {
+  if (badMacRecovering.has(sessionId)) return;
+
+  const now = Date.now();
+  const recent = (badMacTimestamps.get(sessionId) || []).filter(
+    t => now - t < BAD_MAC_WINDOW_MS
+  );
+  recent.push(now);
+  badMacTimestamps.set(sessionId, recent);
+
+  if (recent.length < BAD_MAC_MAX_ERRORS) return;
+
+  badMacTimestamps.delete(sessionId);
+  badMacRecovering.add(sessionId);
+
+  logger.warn({
+    info: "Bad MAC error threshold reached, clearing Signal sessions and reconnecting",
+    sessionId,
+    errorCount: recent.length
+  });
+
+  clearSignalSessions(sessionId)
+    .catch(err =>
+      logger.error({ info: "Error during Bad MAC recovery", sessionId, err })
+    )
+    .finally(() => {
+      badMacRecovering.delete(sessionId);
+      wbot.end(new Error("Bad MAC recovery: forcing reconnect"));
+    });
 };
 
 const assertUnique = (sessionId: number) => {
@@ -982,10 +1052,8 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     shouldSyncHistoryMessage: () => false,
     shouldIgnoreJid: jid => {
       if (typeof jid !== "string") return false;
-      return (
-        isJidBroadcast(jid) ||
-        jid?.endsWith("newsletter") ||
-        jid === "status@broadcast"
+      return Boolean(
+        isJidBroadcast(jid) || isJidStatusBroadcast(jid) || isJidNewsletter(jid)
       );
     },
     syncFullHistory: false,
@@ -1038,6 +1106,14 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
 
   wbot.ev.on("messages.upsert", async ({ messages, type }) => {
     messages.forEach(msg => {
+      if (
+        msg.messageStubType === proto.WebMessageInfo.StubType.CIPHERTEXT &&
+        msg.messageStubParameters?.some(p => p?.includes("Bad MAC"))
+      ) {
+        handleBadMacError(sessionId, wbot);
+        return;
+      }
+
       msgCache.save(msg);
       logger.debug({
         info: "[RAW] Message received",
@@ -1172,10 +1248,13 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     if (connection === "open") {
       await flushPendingCredsSave(sessionId);
 
+      const isFirstConnection = !whatsapp.firstConnectedAt;
+
       await whatsapp.update({
         status: "CONNECTED",
         qrcode: "",
-        retries: 0
+        retries: 0,
+        ...(isFirstConnection ? { firstConnectedAt: new Date() } : {})
       });
 
       const updatedWhatsapp = await Whatsapp.findByPk(sessionId);
@@ -1295,6 +1374,42 @@ const logout = async (sessionId: number): Promise<void> => {
   await clearSessionKeys(sessionId);
 };
 
+// Simula um envio humano ("digitando..." + pausa antes de enviar) em vez de
+// disparar a mensagem instantaneamente — usado em envios automáticos de
+// primeiro contato, um dos padrões que o antispam do WhatsApp associa a bots.
+const simulateTypingDelay = async (
+  wbot: Session,
+  toJid: string
+): Promise<void> => {
+  try {
+    await wbot.presenceSubscribe(toJid);
+    await wbot.sendPresenceUpdate("composing", toJid);
+    await sleep(1500 + Math.floor(Math.random() * 2000));
+    await wbot.sendPresenceUpdate("paused", toJid);
+  } catch (err) {
+    logger.debug({ info: "Error simulating typing presence", toJid, err });
+  }
+};
+
+// Atraso fixo e curto com presence "composing" antes de mensagens
+// automáticas do bot/sistema (menus de fila, fluxo de bot, despedida) —
+// distinto do simulateTypingDelay acima, que usa um atraso maior e
+// aleatório para o primeiro contato.
+const simulateBotDelay = async (
+  wbot: Session,
+  toJid: string,
+  delayMs: number
+): Promise<void> => {
+  try {
+    await wbot.presenceSubscribe(toJid);
+    await wbot.sendPresenceUpdate("composing", toJid);
+    await sleep(delayMs);
+    await wbot.sendPresenceUpdate("paused", toJid);
+  } catch (err) {
+    logger.debug({ info: "Error simulating bot delay presence", toJid, err });
+  }
+};
+
 const sendMessage = async (
   sessionId: number,
   to: string,
@@ -1303,6 +1418,12 @@ const sendMessage = async (
 ): Promise<ProviderMessage> => {
   const wbot = getWbot(sessionId);
   const toJid = normalizeJid(to);
+
+  if (options?.simulateTyping) {
+    await simulateTypingDelay(wbot, toJid);
+  } else if (options?.botDelayMs) {
+    await simulateBotDelay(wbot, toJid, options.botDelayMs);
+  }
 
   const messageContent: AnyMessageContent = options?.quotedMessageId
     ? {

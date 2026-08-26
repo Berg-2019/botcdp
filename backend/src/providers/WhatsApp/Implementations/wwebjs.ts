@@ -11,6 +11,7 @@ import { getIO } from "../../../libs/socket";
 import Whatsapp from "../../../models/Whatsapp";
 import AppError from "../../../errors/AppError";
 import { logger } from "../../../utils/logger";
+import { sleep } from "../../../utils/sleep";
 import { WhatsappProvider } from "../whatsappProvider";
 import {
   ProviderMessage,
@@ -312,6 +313,42 @@ const removeSession = (whatsappId: number): void => {
   }
 };
 
+// Simula um envio humano ("digitando..." + pausa antes de enviar) em vez de
+// disparar a mensagem instantaneamente — usado em envios automáticos de
+// primeiro contato, um dos padrões que o antispam do WhatsApp associa a bots.
+const simulateTypingDelay = async (
+  wbot: Session,
+  chatId: string
+): Promise<void> => {
+  try {
+    const chat = await wbot.getChatById(chatId);
+    await chat.sendStateTyping();
+    await new Promise(resolve =>
+      setTimeout(resolve, 1500 + Math.floor(Math.random() * 2000))
+    );
+  } catch (err) {
+    logger.debug({ info: "Error simulating typing presence", chatId, err });
+  }
+};
+
+// Atraso fixo e curto com presence "composing" antes de mensagens
+// automáticas do bot/sistema (menus de fila, fluxo de bot, despedida) —
+// distinto do simulateTypingDelay acima, que usa um atraso maior e
+// aleatório para o primeiro contato.
+const simulateBotDelay = async (
+  wbot: Session,
+  chatId: string,
+  delayMs: number
+): Promise<void> => {
+  try {
+    const chat = await wbot.getChatById(chatId);
+    await chat.sendStateTyping();
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  } catch (err) {
+    logger.debug({ info: "Error simulating bot delay presence", chatId, err });
+  }
+};
+
 const sendMessage = async (
   sessionId: number,
   to: string,
@@ -319,6 +356,12 @@ const sendMessage = async (
   options?: SendMessageOptions
 ): Promise<ProviderMessage> => {
   const wbot = getWbot(sessionId);
+
+  if (options?.simulateTyping) {
+    await simulateTypingDelay(wbot, to);
+  } else if (options?.botDelayMs) {
+    await simulateBotDelay(wbot, to, options.botDelayMs);
+  }
 
   const quotedMsgSerializedId = options?.quotedMessageId
     ? getSerializedMessageId(
@@ -514,10 +557,13 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       logger.info(`Session: ${sessionName} READY`);
 
       try {
+        const isFirstConnection = !whatsapp.firstConnectedAt;
+
         await whatsapp.update({
           status: "CONNECTED",
           qrcode: "",
-          retries: 0
+          retries: 0,
+          ...(isFirstConnection ? { firstConnectedAt: new Date() } : {})
         });
 
         io.emit("whatsappSession", {
@@ -555,7 +601,17 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     wbot.on("disconnected", async reason => {
       logger.info(`Disconnected session: ${sessionName}, reason: ${reason}`);
       try {
-        await whatsapp.update({ status: "OPENING", session: "" });
+        // Backoff exponencial (3s, 6s, 12s... até 60s), mesma fórmula do
+        // provider whaileys — evita loops agressivos de reconexão, um dos
+        // padrões associados pelo WhatsApp a bots/automação.
+        const nextRetry = (whatsapp.retries || 0) + 1;
+        const backoffMs = Math.min(3000 * 2 ** (nextRetry - 1), 60000);
+
+        await whatsapp.update({
+          status: "OPENING",
+          session: "",
+          retries: nextRetry
+        });
 
         io.emit("whatsappSession", {
           action: "update",
@@ -563,10 +619,10 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         });
 
         logger.warn(
-          `Session ${sessionName} disconnected. Restarting in 2 seconds...`
+          `Session ${sessionName} disconnected. Reconnecting in ${backoffMs}ms (attempt ${nextRetry})...`
         );
 
-        await new Promise(r => setTimeout(r, 2000));
+        await sleep(backoffMs);
 
         init(whatsapp);
       } catch (err) {

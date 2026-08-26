@@ -24,7 +24,11 @@ import CreateContactService from "../services/ContactServices/CreateContactServi
 import ExecuteBotFlowService from "../services/WbotServices/ExecuteBotFlowService";
 
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
-import { MessageType, MessageAck } from "../providers/WhatsApp/types";
+import {
+  MessageType,
+  MessageAck,
+  BOT_MESSAGE_DELAY_MS
+} from "../providers/WhatsApp/types";
 
 const writeFileAsync = promisify(writeFile);
 
@@ -181,7 +185,8 @@ const handleQueueLogic = async (
         await whatsappProvider.sendMessage(
           whatsappId,
           `${contactPayload.number}@c.us`,
-          body
+          body,
+          { botDelayMs: BOT_MESSAGE_DELAY_MS }
         );
       } catch (error) {
         logger.error("Erro ao enviar saudação da fila única:", error);
@@ -216,7 +221,8 @@ const handleQueueLogic = async (
       await whatsappProvider.sendMessage(
         whatsappId,
         `${contactPayload.number}@c.us`,
-        body
+        body,
+        { botDelayMs: BOT_MESSAGE_DELAY_MS }
       );
     } catch (error) {
       logger.error("Erro ao enviar mensagem de saudação da fila:", error);
@@ -238,7 +244,8 @@ const handleQueueLogic = async (
           await whatsappProvider.sendMessage(
             whatsappId,
             `${contactPayload.number}@c.us`,
-            body
+            body,
+            { botDelayMs: BOT_MESSAGE_DELAY_MS }
           );
         } catch (error) {
           logger.error("Erro ao enviar mensagem com opções da fila:", error);
@@ -331,7 +338,8 @@ export const handleMessage = async (
             await whatsappProvider.sendMessage(
               contextPayload.whatsappId,
               `${contactPayload.number}@c.us`,
-              `✅ Obrigado! Sua nota *${ratingValue}⭐* foi registrada. Ficamos felizes em ajudar! 😊`
+              `✅ Obrigado! Sua nota *${ratingValue}⭐* foi registrada. Ficamos felizes em ajudar! 😊`,
+              { botDelayMs: BOT_MESSAGE_DELAY_MS }
             );
           } catch {}
           return;
@@ -369,8 +377,12 @@ export const handleMessage = async (
       const filename = await saveMediaFile(mediaPayload);
       messageData.mediaUrl = filename;
       messageData.body = processedMessage.body || filename;
-      const [mediaType] = mediaPayload.mimetype.split("/");
-      messageData.mediaType = mediaType;
+      // Preserva "sticker" em vez de derivar do mimetype (image/webp viraria
+      // "image" e o frontend não teria como diferenciar de uma foto normal
+      // para exibir no tamanho/estilo correto).
+      const [derivedType] = mediaPayload.mimetype.split("/");
+      messageData.mediaType =
+        processedMessage.type === "sticker" ? "sticker" : derivedType;
     }
 
     let lastMessageText = "";

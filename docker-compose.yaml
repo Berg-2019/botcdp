@@ -20,6 +20,7 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:9001}
       - PROXY_PORT=${PROXY_PORT:-9000}
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-whaileys}
+      - WHATSAPP_INVITE_MIN_CONNECTION_AGE_DAYS=${WHATSAPP_INVITE_MIN_CONNECTION_AGE_DAYS:-7}
       - IO_REDIS_SERVER=redis
       - IO_REDIS_PORT=6379
       - CHROME_ARGS=--no-sandbox --disable-setuid-sandbox

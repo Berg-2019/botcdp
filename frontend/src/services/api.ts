@@ -78,7 +78,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error('Unauthorized or Forbidden');
   }
 
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const text = await res.text();
+    let message = text;
+    try {
+      const data = JSON.parse(text);
+      if (data?.error) message = data.error;
+    } catch {
+      // Corpo não é JSON (ex.: erro HTML do proxy) — mantém o texto cru.
+    }
+    const error = new Error(message || 'Erro inesperado') as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
   return res.json();
 }
 
@@ -169,6 +181,26 @@ export const api = {
   async getQuickAnswers(search = ''): Promise<QuickAnswer[]> {
     const query = search ? `?searchParam=${encodeURIComponent(search)}` : '';
     return request(`/api/quickAnswers${query}`);
+  },
+
+  async createQuickAnswer(data: { shortcut: string; message: string }): Promise<QuickAnswer> {
+    return request('/api/quickAnswers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateQuickAnswer(quickAnswerId: number, data: { shortcut?: string; message?: string }): Promise<QuickAnswer> {
+    return request(`/api/quickAnswers/${quickAnswerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteQuickAnswer(quickAnswerId: number): Promise<{ message: string }> {
+    return request(`/api/quickAnswers/${quickAnswerId}`, {
+      method: 'DELETE',
+    });
   },
 
   async getQueues(): Promise<Queue[]> {
@@ -290,7 +322,7 @@ export const api = {
   // Atualiza dados de um usuário existente
   // Campos atualizáveis: name, email, profile
   // Comentários em português
-  async updateUser(userId: number, data: { name?: string; email?: string; profile?: string }): Promise<SystemUser> {
+  async updateUser(userId: number, data: { name?: string; email?: string; profile?: string; queueIds?: number[] }): Promise<SystemUser> {
     return request(`/api/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(data),

@@ -40,15 +40,8 @@ const UpdateUserService = async ({
     password: Yup.string()
   });
 
-  const {
-    email,
-    phone,
-    password,
-    profile,
-    name,
-    queueIds = [],
-    whatsappId
-  } = userData;
+  const { email, phone, password, profile, name, queueIds, whatsappId } =
+    userData;
 
   try {
     await schema.validate({ email, password, profile, name });
@@ -58,14 +51,20 @@ const UpdateUserService = async ({
 
   const updateData: Record<string, any> = {};
   if (email !== undefined) updateData.email = email;
-  if (phone !== undefined) updateData.phone = phone ? normalizePhone(phone) : null;
+  if (phone !== undefined)
+    updateData.phone = phone ? normalizePhone(phone) : null;
   if (name !== undefined) updateData.name = name;
   if (profile !== undefined) updateData.profile = profile;
-  if (whatsappId !== undefined) updateData.whatsappId = whatsappId ? whatsappId : null;
+  if (whatsappId !== undefined) updateData.whatsappId = whatsappId || null;
 
   await user.update(updateData);
 
-  await user.$set("queues", queueIds);
+  // Só mexe nos setores quando queueIds é explicitamente enviado — do
+  // contrário, uma edição que só muda nome/email/perfil apagaria os
+  // setores do usuário (o valor default anterior era [], sempre executado).
+  if (queueIds !== undefined) {
+    await user.$set("queues", queueIds);
+  }
 
   await user.reload();
 

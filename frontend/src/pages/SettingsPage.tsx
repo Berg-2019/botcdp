@@ -1,20 +1,31 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInstallPrompt } from '@/contexts/InstallPromptContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LogOut, User, Phone, Shield, Wrench, Headphones, Server, Check } from 'lucide-react';
+import { LogOut, User, Phone, Shield, Wrench, Headphones, Server, Check, Download, Share, PlusSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { canInstall, isStandalone, isIOS, promptInstall } = useInstallPrompt();
   const [serverUrl, setServerUrl] = useState(api.getBaseUrl());
   const [saved, setSaved] = useState(false);
+  const [installOutcome, setInstallOutcome] = useState<'accepted' | 'dismissed' | null>(null);
 
-  const handleLogout = () => {
-    logout();
+  const handleInstall = async () => {
+    const outcome = await promptInstall();
+    if (outcome === 'accepted' || outcome === 'dismissed') setInstallOutcome(outcome);
+  };
+
+  const handleLogout = async () => {
+    // Espera a sessão realmente encerrar antes de navegar — sem isso,
+    // isAuthenticated ainda está true no momento da navegação e a rota
+    // /login redireciona de volta para a tela anterior (App.tsx).
+    await logout();
     navigate('/login', { replace: true });
   };
 
@@ -89,6 +100,42 @@ export default function SettingsPage() {
           >
             {saved ? <><Check className="h-4 w-4 mr-2 text-green-500" /> Salvo</> : 'Salvar URL do servidor'}
           </Button>
+        </div>
+
+        {/* Instalar aplicativo (acesso rápido no computador/celular) */}
+        <div className="rounded-2xl bg-card p-4 border space-y-3">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Download className="h-4 w-4 text-muted-foreground" /> Acesso rápido
+          </p>
+
+          {isStandalone ? (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Check className="h-4 w-4 text-green-500" /> Já instalado neste dispositivo
+            </p>
+          ) : canInstall ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Instale o painel como um app para abrir direto da tela inicial ou da área de trabalho, sem precisar do navegador.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full rounded-xl"
+                onClick={handleInstall}
+              >
+                {installOutcome === 'accepted' ? <><Check className="h-4 w-4 mr-2 text-green-500" /> Instalado</> : 'Instalar aplicativo'}
+              </Button>
+            </>
+          ) : isIOS ? (
+            <p className="text-sm text-muted-foreground space-y-1">
+              No iPhone/iPad: toque em <Share className="h-3.5 w-3.5 inline mx-0.5 -mt-0.5" /> (Compartilhar) na barra do Safari e depois em{' '}
+              <span className="inline-flex items-center gap-0.5 font-medium text-foreground"><PlusSquare className="h-3.5 w-3.5" /> Adicionar à Tela de Início</span>.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Seu navegador ainda não liberou a instalação. Tente pelo Chrome, Edge ou Safari mais recentes.
+            </p>
+          )}
         </div>
 
         <Button variant="outline" className="w-full rounded-xl h-12" onClick={handleLogout}>

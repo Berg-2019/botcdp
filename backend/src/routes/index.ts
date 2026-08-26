@@ -14,6 +14,7 @@ import dashboardRoutes from "./dashboardRoutes";
 import botFlowRoutes from "./botFlowRoutes";
 import greetingRoutes from "./greetingRoutes";
 import generalSettingRoutes from "./generalSettingRoutes";
+import quickAnswerRoutes from "./quickAnswerRoutes";
 
 const routes = Router();
 
@@ -30,6 +31,7 @@ routes.use(queueRoutes);
 routes.use(dashboardRoutes);
 routes.use(botFlowRoutes);
 routes.use(greetingRoutes);
+routes.use(quickAnswerRoutes);
 routes.use("/external", apiRoutes);
 
 export default routes;

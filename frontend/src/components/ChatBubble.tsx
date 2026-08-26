@@ -7,20 +7,18 @@ function formatTime(date: string) {
   return new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Figurinhas do WhatsApp são sempre .webp — o mediaType "sticker" só existe
+// para mensagens recebidas após esta correção; mensagens antigas no banco
+// ainda têm mediaType "image", então a extensão cobre os dois casos.
+function isSticker(message: Message): boolean {
+  return message.mediaType === 'sticker' || !!message.mediaUrl?.match(/\.webp$/i);
+}
+
 function MediaContent({ message }: { message: Message }) {
   const { mediaUrl, mediaType } = message;
   if (!mediaUrl) return null;
 
   const fromMe = message.fromMe;
-
-  // Image
-  if (mediaType?.startsWith('image')) {
-    return (
-      <a href={mediaUrl} target="_blank" rel="noreferrer" className="block mb-1">
-        <img src={mediaUrl} alt="" className="rounded-lg max-w-full max-h-60 object-cover" loading="lazy" />
-      </a>
-    );
-  }
 
   // Video
   if (mediaType?.startsWith('video')) {
@@ -37,6 +35,15 @@ function MediaContent({ message }: { message: Message }) {
       <div className="mb-1">
         <AudioPlayer src={mediaUrl} fromMe={fromMe} />
       </div>
+    );
+  }
+
+  // Image (figurinhas são tratadas à parte, em ChatBubble)
+  if (mediaType?.startsWith('image')) {
+    return (
+      <a href={mediaUrl} target="_blank" rel="noreferrer" className="block mb-1">
+        <img src={mediaUrl} alt="" className="rounded-lg max-w-full max-h-60 object-cover" loading="lazy" />
+      </a>
     );
   }
 
@@ -60,6 +67,25 @@ function MediaContent({ message }: { message: Message }) {
 
 export function ChatBubble({ message }: { message: Message }) {
   const fromMe = message.fromMe;
+
+  // Figurinhas no WhatsApp aparecem no tamanho real (~128px), sem o fundo
+  // colorido/balão de mensagem normal e sem legenda — só a imagem e o
+  // horário/confirmação de leitura embaixo.
+  if (isSticker(message) && message.mediaUrl) {
+    return (
+      <div className={cn('flex px-3 mb-1', fromMe ? 'justify-end' : 'justify-start')}>
+        <div className="w-32">
+          <a href={message.mediaUrl} target="_blank" rel="noreferrer" className="block">
+            <img src={message.mediaUrl} alt="" className="w-32 h-32 object-contain" loading="lazy" />
+          </a>
+          <div className={cn('flex items-center gap-1 mt-0.5', fromMe ? 'justify-end' : 'justify-start', 'text-muted-foreground')}>
+            <span className="text-[10px]">{formatTime(message.createdAt)}</span>
+            {fromMe && (message.read ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn('flex px-3 mb-1', fromMe ? 'justify-end' : 'justify-start')}>

@@ -10,7 +10,7 @@ const ALLOWED_EXTENSIONS = [
   ".txt", ".csv"
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 200 * 1024 * 1024;
 
 const multerConfig: Options & { directory: string } = {
   directory: publicFolder,

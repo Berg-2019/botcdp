@@ -39,9 +39,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await api.logout();
-    disconnectSocket();
-    setUser(null);
+    try {
+      await api.logout();
+    } catch {
+      // Mesmo se a chamada ao servidor falhar (rede instável, sessão já
+      // expirada etc.), a sessão local precisa encerrar do mesmo jeito —
+      // do contrário o usuário fica preso autenticado no app.
+    } finally {
+      disconnectSocket();
+      setUser(null);
+    }
   }, []);
 
   return (

@@ -1,36 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, X } from 'lucide-react';
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
+import { useInstallPrompt } from '@/contexts/InstallPromptContext';
 
 const DISMISSED_KEY = 'pwa_install_dismissed';
 
-// Captura o evento beforeinstallprompt (Android/Chrome) e mostra um banner
-// próprio, já que o navegador não exibe o prompt nativo de forma confiável
-// sozinho. iOS Safari não dispara esse evento — não tem como oferecer aqui.
+// Banner flutuante que aparece quando o navegador oferece a instalação
+// (Android/Chrome/Edge). iOS Safari não dispara beforeinstallprompt — quem
+// usa iOS precisa instalar pelo botão manual em Configurações.
 export function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const { canInstall, isStandalone, promptInstall } = useInstallPrompt();
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === 'true');
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  if (!deferredPrompt || dismissed) return null;
+  if (!canInstall || isStandalone || dismissed) return null;
 
   const handleInstall = async () => {
-    await deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    setDeferredPrompt(null);
+    await promptInstall();
   };
 
   const handleDismiss = () => {

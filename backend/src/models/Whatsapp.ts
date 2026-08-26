@@ -71,6 +71,10 @@ class Whatsapp extends Model {
   @Column
   isDefault: boolean;
 
+  @AllowNull
+  @Column(DataType.DATE)
+  firstConnectedAt: Date | null;
+
   @CreatedAt
   createdAt: Date;
 

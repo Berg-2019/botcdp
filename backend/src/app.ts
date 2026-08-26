@@ -31,6 +31,12 @@ app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(Sentry.Handlers.requestHandler());
 app.use("/public", express.static(uploadConfig.directory));
+// Também servido sob /api/public: o proxy reverso externo só encaminha o
+// prefixo /api para este backend (o restante cai no fallback do frontend),
+// então mídias do WhatsApp (fotos/áudios/vídeos) precisam desse prefixo para
+// serem realmente entregues em produção — ver Message.ts (getter mediaUrl).
+// Registrado antes do rate limiter de /api para não limitar carregamento de mídia.
+app.use("/api/public", express.static(uploadConfig.directory));
 app.use("/api", apiLimiter, routes);
 
 app.use(Sentry.Handlers.errorHandler());

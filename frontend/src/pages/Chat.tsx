@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Zap, User, Paperclip, Image, Camera, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, Send, Zap, User, Paperclip, Image, Camera, Loader2, CheckCircle2, Circle, PictureInPicture2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ChatBubble } from '@/components/ChatBubble';
@@ -8,8 +8,8 @@ import { QuickReplyPicker } from '@/components/QuickReplyPicker';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { AudioRecorder } from '@/components/AudioRecorder';
 import { api } from '@/services/api';
-import { getSocket } from '@/services/socket';
-import type { Message, Ticket } from '@/types';
+import { useTicketMessages } from '@/hooks/useTicketMessages';
+import { usePipChat } from '@/contexts/PipChatContext';
 
 const STATUS_LABELS = {
   pending: { label: 'Pendente', color: 'bg-amber-100 text-amber-800', icon: Circle },
@@ -20,8 +20,6 @@ const STATUS_LABELS = {
 export default function Chat() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
   const [text, setText] = useState('');
   const [showQuick, setShowQuick] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -35,44 +33,17 @@ export default function Chat() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const ticketId = Number(id);
 
-  const fetchMessages = useCallback(async () => {
-    try {
-      const data = await api.getMessages(ticketId);
-      setMessages(data.messages || []);
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({
-          top: scrollRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
+  const { messages, ticket, setTicket, fetchMessages, fetchTicket } = useTicketMessages(ticketId);
+  const { isSupported: pipSupported, openPip } = usePipChat();
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
       });
-    } catch { }
-  }, [ticketId]);
-
-  const fetchTicket = useCallback(async () => {
-    try {
-      setTicket(await api.getTicket(ticketId));
-    } catch { }
-  }, [ticketId]);
-
-  useEffect(() => {
-    fetchTicket();
-    fetchMessages();
-  }, [fetchTicket, fetchMessages]);
-
-  useEffect(() => {
-    const socket = getSocket();
-    socket.emit("joinChatBox", ticketId.toString());
-
-    const handler = (data: any) => {
-      if (data?.message?.ticketId === ticketId || data?.ticketId === ticketId) {
-        fetchMessages();
-      }
-    };
-    socket.on('appMessage', handler);
-    return () => {
-      socket.off('appMessage', handler);
-    };
-  }, [ticketId, fetchMessages]);
+    });
+  }, [messages]);
 
   const handleSend = async () => {
     if (!text.trim() || sending) return;
@@ -145,6 +116,16 @@ export default function Chat() {
           <span className={`text-[10px] font-medium px-2 py-1 rounded-full ${STATUS_LABELS[ticket.status as keyof typeof STATUS_LABELS]?.color || ''}`}>
             {STATUS_LABELS[ticket.status as keyof typeof STATUS_LABELS]?.label || ticket.status}
           </span>
+        )}
+        {pipSupported && (
+          <button
+            onClick={() => ticket && openPip(ticket.id, ticket.contact.name)}
+            title="Destacar conversa"
+            aria-label="Destacar conversa"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <PictureInPicture2 className="h-5 w-5" />
+          </button>
         )}
         <button onClick={() => setShowContact(true)} className="text-muted-foreground hover:text-foreground">
           <User className="h-5 w-5" />

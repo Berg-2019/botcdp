@@ -4,6 +4,7 @@ import BotFlow from "../../models/BotFlow";
 import BotStep from "../../models/BotStep";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider } from "../../providers/WhatsApp/whatsappProvider";
+import { BOT_MESSAGE_DELAY_MS } from "../../providers/WhatsApp/types";
 import { logger } from "../../utils/logger";
 import formatBody from "../../helpers/Mustache";
 import { ContactPayload } from "../../handlers/handleWhatsappEvents";
@@ -87,7 +88,8 @@ const sendStep = async (
     await whatsappProvider.sendMessage(
       whatsappId,
       `${contactNumber}@c.us`,
-      body
+      body,
+      { botDelayMs: BOT_MESSAGE_DELAY_MS }
     );
   } catch (err) {
     Sentry.captureException(err);
@@ -150,7 +152,8 @@ const clearBotState = async (
       await whatsappProvider.sendMessage(
         notify.whatsappId,
         `${notify.contactNumber}@c.us`,
-        BOT_HANDOFF_MESSAGE
+        BOT_HANDOFF_MESSAGE,
+        { botDelayMs: BOT_MESSAGE_DELAY_MS }
       );
     } catch (err) {
       Sentry.captureException(err);

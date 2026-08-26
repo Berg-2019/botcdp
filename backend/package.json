@@ -19,7 +19,8 @@
   "license": "MIT",
   "overrides": {
     "protobufjs": "7.6.5",
-    "axios": "1.18.1"
+    "axios": "1.18.1",
+    "uuid": "11.1.1"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
@@ -54,7 +55,7 @@
     "sequelize-cli": "^5.5.1",
     "sequelize-typescript": "^2.1.6",
     "socket.io": "^4.4.1",
-    "uuid": "^8.3.2",
+    "uuid": "11.1.1",
     "whaileys": "^6.5.0",
     "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
     "yup": "^0.32.8"

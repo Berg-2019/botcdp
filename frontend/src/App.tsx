@@ -4,6 +4,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { InstallPromptProvider } from "@/contexts/InstallPromptContext";
+import { PipChatProvider } from "@/contexts/PipChatContext";
+import { PipChatPortal } from "@/components/PipChatPortal";
 import { BottomNav } from "@/components/BottomNav";
 import { ForcePasswordChange } from "@/components/ForcePasswordChange";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -77,9 +80,14 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <InstallPromptProvider>
+          <PipChatProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+            <PipChatPortal />
+          </PipChatProvider>
+        </InstallPromptProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

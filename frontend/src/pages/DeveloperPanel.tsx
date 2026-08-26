@@ -7,7 +7,7 @@ import { getReadableErrorMessage } from '@/utils/errorHandler';
 import {
   MessageSquareText, FolderTree, Users, Bot, Settings, ChevronRight,
   Plus, Wifi, WifiOff, QrCode, RefreshCw, Trash2, Smartphone,
-  BatteryCharging, BatteryMedium, Loader2, CheckCircle2, AlertTriangle, Copy, Check, Edit, Pencil,
+  BatteryCharging, BatteryMedium, Loader2, CheckCircle2, AlertTriangle, Copy, Check, Edit, Pencil, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,14 +30,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { GreetingConfig, BotFlow, SystemUser, GeneralSettings, Queue, WhatsappConnection } from '@/types';
+import type { GreetingConfig, BotFlow, SystemUser, GeneralSettings, Queue, QuickAnswer, WhatsappConnection } from '@/types';
 import { BotFlowEditorDialog } from '@/components/BotFlowEditorDialog';
 
-type Tab = 'greetings' | 'queues' | 'users' | 'bot' | 'general';
+type Tab = 'greetings' | 'queues' | 'quickAnswers' | 'users' | 'bot' | 'general';
 
 const tabItems: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'greetings', label: 'Saudações', icon: MessageSquareText },
   { key: 'queues', label: 'Setores', icon: FolderTree },
+  { key: 'quickAnswers', label: 'Respostas Rápidas', icon: Zap },
   { key: 'users', label: 'Usuários', icon: Users },
   { key: 'bot', label: 'Bot', icon: Bot },
   { key: 'general', label: 'Geral', icon: Settings },
@@ -107,7 +108,7 @@ export default function DeveloperPanel() {
   // Estado do dialog de editar usuário
   const [showEditUserDialog, setShowEditUserDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(false);
-  const [editUserData, setEditUserData] = useState<{ id: number; name: string; email: string; profile: string } | null>(null);
+  const [editUserData, setEditUserData] = useState<{ id: number; name: string; email: string; profile: string; queueIds: number[] } | null>(null);
 
   // Estado do dialog de confirmar remoção
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
@@ -132,19 +133,31 @@ export default function DeveloperPanel() {
   const [queueToDelete, setQueueToDelete] = useState<Queue | null>(null);
   const [deletingQueue, setDeletingQueue] = useState(false);
 
+  // Estado da aba de Respostas Rápidas
+  const [quickAnswers, setQuickAnswers] = useState<QuickAnswer[]>([]);
+  const [showQuickAnswerDialog, setShowQuickAnswerDialog] = useState(false);
+  const [editingQuickAnswer, setEditingQuickAnswer] = useState<QuickAnswer | null>(null);
+  const [savingQuickAnswer, setSavingQuickAnswer] = useState(false);
+  const [quickAnswerForm, setQuickAnswerForm] = useState({ shortcut: '', message: '' });
+  const [showDeleteQuickAnswerDialog, setShowDeleteQuickAnswerDialog] = useState(false);
+  const [quickAnswerToDelete, setQuickAnswerToDelete] = useState<QuickAnswer | null>(null);
+  const [deletingQuickAnswer, setDeletingQuickAnswer] = useState(false);
+
   // Busca geral de dados ao montar o componente
   useEffect(() => {
     async function fetchData() {
       try {
-        const [greetingsData, queuesData, usersData, botFlowsData, settingsData] = await Promise.all([
+        const [greetingsData, queuesData, quickAnswersData, usersData, botFlowsData, settingsData] = await Promise.all([
           api.getGreetings(),
           api.getQueues(),
+          api.getQuickAnswers(),
           api.getUsers(),
           api.getBotFlows(),
           api.getGeneralSettings(),
         ]);
         setGreetings(greetingsData);
         setQueues(queuesData);
+        setQuickAnswers(quickAnswersData);
         setUsers(usersData);
         setBotFlows(botFlowsData);
         setSettings(settingsData);
@@ -479,8 +492,22 @@ export default function DeveloperPanel() {
       name: user.name,
       email: user.email,
       profile: user.profile,
+      queueIds: user.queues.map(q => q.id),
     });
     setShowEditUserDialog(true);
+  };
+
+  const toggleEditUserQueue = (queueId: number) => {
+    setEditUserData(prev =>
+      prev
+        ? {
+            ...prev,
+            queueIds: prev.queueIds.includes(queueId)
+              ? prev.queueIds.filter(id => id !== queueId)
+              : [...prev.queueIds, queueId],
+          }
+        : null
+    );
   };
 
   /**
@@ -511,6 +538,7 @@ export default function DeveloperPanel() {
         name: editUserData.name.trim(),
         email: editUserData.email.trim(),
         profile: editUserData.profile,
+        queueIds: editUserData.queueIds,
       });
 
       // PASSO 4: Recarrega lista de usuários
@@ -775,6 +803,60 @@ export default function DeveloperPanel() {
     }
   };
 
+  const handleOpenQuickAnswerDialog = (quickAnswer?: QuickAnswer) => {
+    if (quickAnswer) {
+      setEditingQuickAnswer(quickAnswer);
+      setQuickAnswerForm({ shortcut: quickAnswer.shortcut, message: quickAnswer.message });
+    } else {
+      setEditingQuickAnswer(null);
+      setQuickAnswerForm({ shortcut: '', message: '' });
+    }
+    setShowQuickAnswerDialog(true);
+  };
+
+  const handleSaveQuickAnswer = async () => {
+    if (!quickAnswerForm.shortcut.trim() || !quickAnswerForm.message.trim()) {
+      toast.error('Preencha o atalho e a mensagem');
+      return;
+    }
+    try {
+      setSavingQuickAnswer(true);
+      if (editingQuickAnswer) {
+        await api.updateQuickAnswer(editingQuickAnswer.id, quickAnswerForm);
+        toast.success('Resposta rápida atualizada!');
+      } else {
+        await api.createQuickAnswer(quickAnswerForm);
+        toast.success('Resposta rápida criada!');
+      }
+      const quickAnswersData = await api.getQuickAnswers();
+      setQuickAnswers(quickAnswersData);
+      setShowQuickAnswerDialog(false);
+    } catch (err) {
+      console.error('Erro ao salvar resposta rápida:', err);
+      toast.error('Erro ao salvar resposta rápida', { description: getReadableErrorMessage(err) });
+    } finally {
+      setSavingQuickAnswer(false);
+    }
+  };
+
+  const handleDeleteQuickAnswer = async () => {
+    if (!quickAnswerToDelete) return;
+    try {
+      setDeletingQuickAnswer(true);
+      await api.deleteQuickAnswer(quickAnswerToDelete.id);
+      const quickAnswersData = await api.getQuickAnswers();
+      setQuickAnswers(quickAnswersData);
+      setShowDeleteQuickAnswerDialog(false);
+      setQuickAnswerToDelete(null);
+      toast.success('Resposta rápida removida!');
+    } catch (err) {
+      console.error('Erro ao remover resposta rápida:', err);
+      toast.error('Erro ao remover resposta rápida', { description: getReadableErrorMessage(err) });
+    } finally {
+      setDeletingQuickAnswer(false);
+    }
+  };
+
   const handleSaveGreeting = async (queueId: number, message: string, enabled: boolean) => {
     try {
       await api.updateGreeting(queueId, { message, enabled });
@@ -860,6 +942,34 @@ export default function DeveloperPanel() {
                   <Edit className="h-3.5 w-3.5" />
                 </Button>
                 <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { setQueueToDelete(q); setShowDeleteQueueDialog(true); }} title="Remover setor">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </>
+        )}
+
+        {tab === 'quickAnswers' && (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Respostas Rápidas</h2>
+              <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs" onClick={() => handleOpenQuickAnswerDialog()}>
+                <Plus className="h-3 w-3 mr-1" /> Nova Resposta
+              </Button>
+            </div>
+            {quickAnswers.length === 0 && (
+              <p className="text-xs text-muted-foreground p-2">Nenhuma resposta rápida cadastrada ainda.</p>
+            )}
+            {quickAnswers.map((qa) => (
+              <div key={qa.id} className="rounded-2xl bg-card border p-4 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{qa.shortcut}</p>
+                  <p className="text-xs text-muted-foreground truncate">{qa.message}</p>
+                </div>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleOpenQuickAnswerDialog(qa)} title="Editar resposta">
+                  <Edit className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { setQuickAnswerToDelete(qa); setShowDeleteQuickAnswerDialog(true); }} title="Remover resposta">
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -1499,6 +1609,31 @@ export default function DeveloperPanel() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Campo: Setores do Agente */}
+                <div>
+                  <label className="text-sm font-medium">Setores</label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Define quais filas de atendimento este usuário vai receber.
+                  </p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto rounded-xl border p-2">
+                    {queues.length === 0 && (
+                      <p className="text-xs text-muted-foreground p-2">Nenhum setor cadastrado ainda.</p>
+                    )}
+                    {queues.map((queue) => (
+                      <div key={queue.id} className="flex items-center gap-2 rounded-lg p-2 text-sm">
+                        <Checkbox
+                          id={`edit-user-queue-${queue.id}`}
+                          checked={editUserData.queueIds.includes(queue.id)}
+                          onCheckedChange={() => toggleEditUserQueue(queue.id)}
+                        />
+                        <Label htmlFor={`edit-user-queue-${queue.id}`} className="flex-1 cursor-pointer font-normal">
+                          {queue.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Botões de ação: Cancelar / Atualizar */}
@@ -1916,6 +2051,78 @@ export default function DeveloperPanel() {
             <Button variant="destructive" onClick={handleDeleteQueue} disabled={deletingQueue}>
               {deletingQueue ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {deletingQueue ? 'Removendo...' : 'Remover'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: CRIAR/EDITAR RESPOSTA RÁPIDA ==================== */}
+      <Dialog open={showQuickAnswerDialog} onOpenChange={setShowQuickAnswerDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{editingQuickAnswer ? 'Editar Resposta Rápida' : 'Nova Resposta Rápida'}</DialogTitle>
+            <DialogDescription>
+              Configure o atalho e a mensagem que será inserida no chat.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Atalho</Label>
+              <Input
+                value={quickAnswerForm.shortcut}
+                onChange={(e) => setQuickAnswerForm({ ...quickAnswerForm, shortcut: e.target.value })}
+                placeholder="Ex: /saudacao"
+                className="rounded-xl mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Mensagem</Label>
+              <Textarea
+                value={quickAnswerForm.message}
+                onChange={(e) => setQuickAnswerForm({ ...quickAnswerForm, message: e.target.value })}
+                placeholder="Texto que será inserido no campo de mensagem do chat"
+                className="rounded-xl mt-1"
+                rows={4}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQuickAnswerDialog(false)}>Cancelar</Button>
+            <Button onClick={handleSaveQuickAnswer} disabled={savingQuickAnswer}>
+              {savingQuickAnswer ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {savingQuickAnswer ? 'Salvando...' : editingQuickAnswer ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DIALOG: CONFIRMAR REMOÇÃO DE RESPOSTA RÁPIDA ==================== */}
+      <Dialog open={showDeleteQuickAnswerDialog} onOpenChange={setShowDeleteQuickAnswerDialog}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover Resposta Rápida</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja remover esta resposta rápida? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+
+          {quickAnswerToDelete && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-700 font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Atalho: <span className="font-semibold">{quickAnswerToDelete.shortcut}</span>
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteQuickAnswerDialog(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteQuickAnswer} disabled={deletingQuickAnswer}>
+              {deletingQuickAnswer ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {deletingQuickAnswer ? 'Removendo...' : 'Remover'}
             </Button>
           </DialogFooter>
         </DialogContent>

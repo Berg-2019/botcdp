@@ -122,14 +122,16 @@ export const update = async (
     if (farewellMessage) {
       await SendWhatsAppMessage({
         body: formatBody(farewellMessage, ticket.contact),
-        ticket
+        ticket,
+        systemTriggered: true
       });
     }
 
     try {
       await SendWhatsAppMessage({
         body: "⭐ Como foi nosso atendimento?\nResponda com uma nota de *1 a 5*\n_(1 = Ruim · 5 = Excelente)_",
-        ticket
+        ticket,
+        systemTriggered: true
       });
     } catch {
       // rating request is best-effort

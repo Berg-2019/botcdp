@@ -37,9 +37,13 @@ class Message extends Model {
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
+      // Usa o prefixo /api/public (não /public) porque o proxy reverso
+      // externo em produção só encaminha /api/* para este backend — outros
+      // caminhos caem no fallback do frontend, que devolve o index.html da
+      // SPA em vez do arquivo de mídia (ver app.ts).
       return `${process.env.BACKEND_URL}:${
         process.env.PROXY_PORT
-      }/public/${this.getDataValue("mediaUrl")}`;
+      }/api/public/${this.getDataValue("mediaUrl")}`;
     }
     return null;
   }
