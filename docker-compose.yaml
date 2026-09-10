@@ -91,12 +91,15 @@ services:
 
 # Volumes com "name" explícito e fixo.
 #
-# O Coolify (build pack docker-compose) usa o nome literal do volume em vez do
-# padrão "<projeto>_<volume>" do Docker Compose. Sem o "name" abaixo, um deploy
-# pelo Coolify criaria volumes novos e vazios ("mysql_data", "redis_data") e o
-# banco de produção — que vive em "botcdp_mysql_data" — ficaria órfão.
-# Fixando o nome, tanto `docker compose up` manual quanto o deploy pelo Coolify
-# apontam para exatamente os mesmos volumes.
+# Em deploy manual (`docker compose up`), isso prende os volumes aos nomes
+# botcdp_*, sem depender do nome do diretório do projeto.
+#
+# ATENÇÃO: o Coolify ignora este "name". No deploy pelo Coolify os volumes
+# passam a se chamar "<uuid-da-aplicação>_<nome-com-hífen>" — por exemplo
+# "vs9yqaujlzryrgxcdjrr2nty_mysql-data" para o mysql_data abaixo. Esses volumes
+# do Coolify são estáveis entre deploys, mas trocar a aplicação de UUID (apagar
+# e recriar no painel) deixa os dados para trás. Os volumes botcdp_* seguem no
+# servidor com a cópia dos dados anterior à migração, como rollback.
 volumes:
   mysql_data:
     name: botcdp_mysql_data
